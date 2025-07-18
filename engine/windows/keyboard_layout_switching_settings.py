@@ -2,10 +2,10 @@ import ctypes
 import winreg
 from ctypes import wintypes
 
-from engine.interfaces.keyboard_layout_switching_settings_interface import KeyboardLayoutSwitchingSettingsInterface
+from engine.interfaces.keyboard_layout_switching_system_settings_interface import KeyboardLayoutSwitchingSystemSettingsInterface
 
 
-class WindowsKeyboardLayoutSwitchingSettings(KeyboardLayoutSwitchingSettingsInterface):
+class WindowsKeyboardLayoutSwitchingSettings(KeyboardLayoutSwitchingSystemSettingsInterface):
     _layout_toggle_branch = r"Keyboard Layout\\Toggle"
     _layout_hotkey_reg_name = "Layout Hotkey"
     _language_hotkey_reg_name = "Language Hotkey"

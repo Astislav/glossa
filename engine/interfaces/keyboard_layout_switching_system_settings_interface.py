@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 
 
-class KeyboardLayoutSwitchingSettingsInterface(ABC):
+class KeyboardLayoutSwitchingSystemSettingsInterface(ABC):
     @abstractmethod
     def disable_system_hotkeys(self):
         pass

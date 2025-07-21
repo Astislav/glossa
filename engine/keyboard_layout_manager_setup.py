@@ -1,5 +1,3 @@
-from typing import Optional
-
 from engine.dto.key_combination import KeyCombination
 from engine.dto.keyboard_layout import KeyboardLayout
 from engine.interfaces.keyboard_layout_registry_interface import KeyboardLayoutRegistryInterface
@@ -7,19 +5,27 @@ from engine.interfaces.keyboard_layout_registry_interface import KeyboardLayoutR
 
 class KeyboardLayoutManagerSetup:
     _in_loop_keyboard_layout_ids: list[str] = []
-    _next_layout_in_loop_hotkey: Optional[KeyCombination] = None
+    _next_layout_in_loop_hotkey: KeyCombination = KeyCombination.from_hotkey_string('Alt+Shift')
     _klid_to_hotkey_bindings: dict[str, KeyCombination] = {}
     _keyboard_layout_registry: KeyboardLayoutRegistryInterface
 
     def __init__(self, keyboard_layout_registry: KeyboardLayoutRegistryInterface):
         self._keyboard_layout_registry = keyboard_layout_registry
+        self._in_loop_keyboard_layout_ids = [klid.system_id for klid in self._keyboard_layout_registry.layouts()]
 
-    def load(self, json: dict):
+    def from_string(self, json: dict):
         self.in_loop_keyboard_layout_ids = json.get("in_loop_kl_ids", [])
         self.next_layout_in_loop_hotkey = KeyCombination.from_hotkey_string(
             json.get("next_kl_hotkey", 'Alt+Shift')
         )
         self.klid_to_hotkey_bindings = json.get("klid_to_hotkey", {})
+
+    def to_string(self) -> dict:
+        return {
+            "in_loop_kl_ids": self.in_loop_keyboard_layout_ids,
+            "next_kl_hotkey": self.next_layout_in_loop_hotkey.to_hotkey_string(),
+            "klid_to_hotkey": self.klid_to_hotkey_bindings
+        }
 
     @property
     def klid_to_hotkey_bindings(self) -> dict[str, KeyCombination]:

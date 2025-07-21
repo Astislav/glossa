@@ -2,6 +2,7 @@ import ctypes
 from ctypes import wintypes
 from time import sleep
 
+from engine.dto.keyboard_layout_id import KeyboardLayoutId
 from engine.interfaces.keyboard_layout_registry_interface import KeyboardLayoutRegistryInterface
 from engine.interfaces.keyboard_layout_switcher_interface import KeyboardLayoutSwitcherInterface
 
@@ -27,9 +28,7 @@ class WindowsKeyboardLayoutSwitcher(KeyboardLayoutSwitcherInterface):
     def __init__(self, layouts_registry: KeyboardLayoutRegistryInterface):
         self._layouts_registry = layouts_registry
 
-    def activate(self, keyboard_layout_id: str):
-        keyboard_layout_id = keyboard_layout_id[-8:].upper().rjust(8, "0")
-
+    def activate(self, keyboard_layout_id: KeyboardLayoutId):
         if not self._layouts_registry.layout_exists(keyboard_layout_id):
             raise ValueError(
                 f"Keyboard layout with ID '{keyboard_layout_id}' is not registered in the system."

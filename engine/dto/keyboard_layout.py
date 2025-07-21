@@ -1,26 +1,25 @@
+from engine.dto.keyboard_layout_id import KeyboardLayoutId
+
+
 class KeyboardLayout:
-    def __init__(self, system_name: str, system_id: str):
-        self._system_name = system_name
-        self._system_id = self._normalize_id(system_id)
+    def __init__(self, keyboard_layout_name: str, keyboard_layout_id: KeyboardLayoutId):
+        self._layout_name = keyboard_layout_name
+        self._layout_id = keyboard_layout_id
 
     @classmethod
-    def from_klid(cls, klid: str):
-        return cls(klid, klid)
-
-    @staticmethod
-    def _normalize_id(system_id: str) -> str:
-        return system_id[-8:].upper().rjust(8, "0")
+    def from_klid(cls, klid: KeyboardLayoutId):
+        return cls(klid.to_string, klid)
 
     @property
-    def system_name(self) -> str:
-        return self._system_name
+    def layout_name(self) -> str:
+        return self._layout_name
 
     @property
-    def system_id(self) -> str:
-        return self._system_id
+    def layout_id(self) -> KeyboardLayoutId:
+        return self._layout_id
 
     def __repr__(self):
-        return f"{self._system_name} ({self._system_id})"
+        return f"{self._layout_name} ({self._layout_id})"
 
     def __eq__(self, other: "KeyboardLayout"):
-        return self._system_id == other._system_id
+        return self._layout_id == other._layout_id

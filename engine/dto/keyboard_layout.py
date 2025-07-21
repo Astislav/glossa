@@ -3,6 +3,10 @@ class KeyboardLayout:
         self._system_name = system_name
         self._system_id = self._normalize_id(system_id)
 
+    @classmethod
+    def from_klid(cls, klid: str):
+        return cls(klid, klid)
+
     @staticmethod
     def _normalize_id(system_id: str) -> str:
         return system_id[-8:].upper().rjust(8, "0")
@@ -17,3 +21,6 @@ class KeyboardLayout:
 
     def __repr__(self):
         return f"{self._system_name} ({self._system_id})"
+
+    def __eq__(self, other: "KeyboardLayout"):
+        return self._system_id == other._system_id

@@ -19,14 +19,18 @@ class KeyboardLayoutManagerSetup:
             json.get("next_kl_hotkey", 'Alt+Shift')
         )
 
+        klids: list[KeyboardLayoutId] = []
         for klid_string in json.get("in_loop_kl_ids", []):
             klid = self._klid_from_string(klid_string)
-            self.in_loop_keyboard_layout_ids.append(klid)
+            klids.append(klid)
+        self.in_loop_keyboard_layout_ids = klids
 
+        bindings: dict[KeyboardLayoutId, KeyCombination] = {}
         for klid_string, hotkey_string in json.get("klid_to_hotkey", {}).items():
             klid = self._klid_from_string(klid_string)
             hotkey = KeyCombination.from_hotkey_string(hotkey_string)
-            self.klid_to_hotkey_bindings[klid] = hotkey
+            bindings[klid] = hotkey
+        self.klid_to_hotkey_bindings = bindings
 
     def to_string(self) -> dict:
         return {

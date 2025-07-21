@@ -17,9 +17,9 @@ class KeyboardHook(KeyboardHookInterface):
     def __del__(self):
         keyboard.unhook(self._handler)
 
-    def register_hook(self, key_combination: KeyCombination, callback: callable):
+    def register_hook(self, key_combination: KeyCombination, callback: callable, *args):
         self._hotkeys.update(key_combination.as_frozenset())
-        self._hotkeys_to_callback[key_combination.as_frozenset()] = callback
+        self._hotkeys_to_callback[key_combination.as_frozenset()] = {'callback': callback, 'args': args}
 
     def process_events(self):
         pass
@@ -39,10 +39,13 @@ class KeyboardHook(KeyboardHookInterface):
         else:
             self._pressed.discard(key)
 
-        for combo, callback in self._hotkeys_to_callback.items():
+        for combo, callback_setup in self._hotkeys_to_callback.items():
             if combo.issubset(self._pressed):
                 if combo not in self._active:
-                    callback()
+                    callback = callback_setup['callback']
+                    args = callback_setup['args']
+                    callback(*args)
+
                     self._active.add(combo)
             else:
                 self._active.discard(combo)

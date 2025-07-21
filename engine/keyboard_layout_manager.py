@@ -1,6 +1,7 @@
 from itertools import cycle
 from threading import Thread
 
+from engine.dto.keyboard_layout_id import KeyboardLayoutId
 from engine.interfaces.keyboard_hook_intreface import KeyboardHookInterface
 from engine.interfaces.keyboard_layout_switcher_interface import KeyboardLayoutSwitcherInterface
 from engine.interfaces.keyboard_layout_switching_system_settings_interface import \
@@ -41,8 +42,14 @@ class KeyboardLayoutManager(Thread):
 
     def _setup_hotkeys(self):
         self._keyboard_hook.register_hook(self._kl_manager_setup.next_layout_in_loop_hotkey, self._switch_next_in_loop)
+        for klid, hotkey in self._kl_manager_setup.klid_to_hotkey_bindings.items():
+            self._keyboard_hook.register_hook(hotkey, self._switch_direct, klid)
 
     def _switch_next_in_loop(self):
         print('switching to next layout in loop...')
         klid = next(self._kl_loop)
+        self._kl_switcher.activate(klid)
+
+    def _switch_direct(self, klid: KeyboardLayoutId):
+        print(f'switching to layout {klid} directly...')
         self._kl_switcher.activate(klid)

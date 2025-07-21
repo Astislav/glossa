@@ -46,3 +46,10 @@ class WindowsKeyboardLayoutsRegistry(KeyboardLayoutRegistryInterface):
                 return klid
         except FileNotFoundError:
             return klid
+
+    def layout_exists(self, keyboard_layout_id: str) -> bool:
+        for registered_layout in self.layouts():
+            if registered_layout == KeyboardLayout.from_klid(keyboard_layout_id):
+                return True
+
+        return False

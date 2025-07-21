@@ -13,7 +13,7 @@ class KeyboardLayoutManager(Thread):
             keyboard_layout_switching_system_settings: KeyboardLayoutSwitchingSystemSettingsInterface,
             keyboard_hook: KeyboardHookInterface
     ):
-        self._keyboard_layout_manager_setup = keyboard_layout_manager_setup
+        self._kl_manager_setup = keyboard_layout_manager_setup
         self._kl_switching_system_settings = keyboard_layout_switching_system_settings
         self._keyboard_hook = keyboard_hook
         self._stopped = False

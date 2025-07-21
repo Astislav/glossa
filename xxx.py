@@ -24,7 +24,7 @@ if __name__ == "__main__":
 
     hook = KeyboardHook()
 
-    manager = KeyboardLayoutManager(setup, settings, hook)
+    manager = KeyboardLayoutManager(setup, settings, layout_switcher, hook)
     manager.start()
 
     try:

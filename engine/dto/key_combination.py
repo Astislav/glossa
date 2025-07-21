@@ -4,7 +4,7 @@ class KeyCombination:
 
     @classmethod
     def from_hotkey_string(cls, string: str) -> "KeyCombination":
-        keys = frozenset(k.strip() for k in string.split("+"))
+        keys = frozenset(k.strip().lower() for k in string.split("+"))
 
         return cls(keys)
 

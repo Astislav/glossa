@@ -14,7 +14,7 @@ class WindowsKeyboardLayoutSwitcher(KeyboardLayoutSwitcherInterface):
     _KLF_ACTIVATE = 0x00000001
     _WM_INPUT_LANG_CHANGE_REQUEST = 0x0050
     _HWND_BROADCAST = 0xFFFF
-    _ERR_SLEEP_TIME_SECONDS = 0.1
+    _ERR_SLEEP_TIME_SECONDS = 0.05
 
     _user32.ActivateKeyboardLayout.argtypes = (wintypes.HKL, wintypes.UINT)
     _user32.PostMessageW.argtypes = (
@@ -35,7 +35,7 @@ class WindowsKeyboardLayoutSwitcher(KeyboardLayoutSwitcherInterface):
             )
 
         print(f"Loading keyboard layout: {keyboard_layout_id}")
-        hkl = self._user32.LoadKeyboardLayoutW(keyboard_layout_id, self._KLF_ACTIVATE)
+        hkl = self._user32.LoadKeyboardLayoutW(keyboard_layout_id.to_string, self._KLF_ACTIVATE)
         if not hkl:
             err = ctypes.get_last_error()
             raise OSError(f"Failed to load keyboard layout: {err}")

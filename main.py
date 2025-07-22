@@ -1,29 +1,37 @@
-from itertools import cycle
+import json
+import time
+from pathlib import Path
 
 from engine.keyboard_hook import KeyboardHook
-from engine.keyboard_layouts import KeyboardLayoutsWin
+from engine.keyboard_layout_manager import KeyboardLayoutManager
+from engine.keyboard_layout_manager_setup import KeyboardLayoutManagerSetup
+from engine.windows.keyboard_layout_registry import WindowsKeyboardLayoutsRegistry
+from engine.windows.keyboard_layout_switcher import WindowsKeyboardLayoutSwitcher
+from engine.windows.keyboard_layout_switching_settings import WindowsKeyboardLayoutSwitchingSettings
 
-CYCLED_LAYOUTS = cycle(['00000409', '00000419'])
-GREEK_LAYOUT = '00000408'
-
-
-def switch_to_greek():
-    KeyboardLayoutsWin.activate_layout(GREEK_LAYOUT)
-
-
-def next_layout():
-    keyboard_layout_id = next(CYCLED_LAYOUTS)
-    KeyboardLayoutsWin.activate_layout(keyboard_layout_id)
-
+SETTINGS_FILE = Path("settings\\settings.json")
 
 if __name__ == "__main__":
-    available_layouts = KeyboardLayoutsWin.available_keyboard_layouts()
-    print(available_layouts)
+    settings = WindowsKeyboardLayoutSwitchingSettings()
+    registry = WindowsKeyboardLayoutsRegistry()
+    layout_switcher = WindowsKeyboardLayoutSwitcher(registry)
+    setup = KeyboardLayoutManagerSetup(registry)
 
-    hotkey_settings = KeyboardLayoutsWin.disable_hotkeys()
+    if SETTINGS_FILE.exists():
+        setup.from_string(json.loads(SETTINGS_FILE.read_text()))
+    else:
+        SETTINGS_FILE.write_text(json.dumps(setup.to_string(), indent=2))
 
-    keyboard = KeyboardHook()
-    keyboard.register_callback(frozenset({'ctrl', 'shift'}), switch_to_greek)
-    keyboard.register_callback(frozenset({'alt', 'shift'}), next_layout)
+    hook = KeyboardHook()
 
-    KeyboardLayoutsWin.restore_hotkeys(*hotkey_settings)
+    manager = KeyboardLayoutManager(setup, settings, layout_switcher, hook)
+    manager.start()
+
+    try:
+        while True:
+            time.sleep(1)
+    except KeyboardInterrupt:
+        pass
+
+    manager.stop()
+    manager.join(timeout=2.0)

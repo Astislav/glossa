@@ -43,9 +43,19 @@ class WindowsKeyboardLayoutSwitcher(KeyboardLayoutSwitcherInterface):
         self._user32.ActivateKeyboardLayout(hkl, 0)
 
         max_attempts = 3
-        for attempt in range(1, max_attempts):
+        for attempt in range(1, max_attempts + 1):
             print(f"Broadcasting keyboard layout change: {keyboard_layout_id} (attempt {attempt}/{max_attempts})")
             if self._user32.PostMessageW(self._HWND_BROADCAST, self._WM_INPUT_LANG_CHANGE_REQUEST, 0, hkl):
+                break
+
+            if self._user32.SendMessageTimeoutW(
+                    self._HWND_BROADCAST,
+                    self._WM_INPUT_LANG_CHANGE_REQUEST,
+                    0,
+                    ctypes.wintypes.LPARAM(hkl),
+                    0x0002 | 0x0001,
+                    150,
+                    None):
                 break
 
             if attempt <= max_attempts:

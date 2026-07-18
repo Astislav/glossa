@@ -7,7 +7,7 @@ from nexus_kit.interfaces import EnvironmentInterface
 
 @singleton
 class Environment(EnvironmentInterface):
-    APP_NAME: str = "LayoutSwitcher"
+    APP_NAME: str = "Glossa"
     SETTINGS_FILE: str = "settings/settings.json"
 
     def __init__(self, env_path: Path | str) -> None:

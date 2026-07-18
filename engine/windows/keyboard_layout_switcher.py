@@ -5,7 +5,6 @@ from time import sleep
 from injector import inject, singleton
 
 from engine.dto.keyboard_layout_id import KeyboardLayoutId
-from engine.interfaces.keyboard_layout_registry_interface import KeyboardLayoutRegistryInterface
 from engine.interfaces.keyboard_layout_switcher_interface import KeyboardLayoutSwitcherInterface
 from engine.loggers import SwitcherLogger
 
@@ -30,16 +29,14 @@ class WindowsKeyboardLayoutSwitcher(KeyboardLayoutSwitcherInterface):
     _user32.PostMessageW.restype = wintypes.BOOL
 
     @inject
-    def __init__(self, layouts_registry: KeyboardLayoutRegistryInterface, log: SwitcherLogger):
-        self._layouts_registry = layouts_registry
+    def __init__(self, log: SwitcherLogger):
         self._log = log
 
     def activate(self, keyboard_layout_id: KeyboardLayoutId):
-        if not self._layouts_registry.layout_exists(keyboard_layout_id):
-            raise ValueError(
-                f"Keyboard layout with ID '{keyboard_layout_id}' is not registered in the system."
-            )
-
+        # No registry existence check here: this is the hot path of every
+        # hotkey press, and enumerating installed layouts costs a series of
+        # registry reads. Validation happens when settings are loaded/saved;
+        # a genuinely missing layout fails LoadKeyboardLayoutW below.
         self._log.info("loading keyboard layout: %s", keyboard_layout_id)
         hkl = self._user32.LoadKeyboardLayoutW(keyboard_layout_id.to_string, self._KLF_ACTIVATE)
         if not hkl:

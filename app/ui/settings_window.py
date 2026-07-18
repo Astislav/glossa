@@ -1,348 +1,275 @@
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QKeyEvent, QKeySequence
 from PySide6.QtWidgets import (
-    QCheckBox, QDialog, QDialogButtonBox, QHBoxLayout, QLabel, QLineEdit,
-    QMessageBox, QPushButton, QScrollArea, QVBoxLayout, QWidget,
+    QCheckBox, QGridLayout, QGroupBox, QHBoxLayout, QLabel, QLineEdit,
+    QMessageBox, QPushButton, QToolButton, QVBoxLayout, QWidget,
 )
 
+from app.services.autostart import Autostart
+from app.services.settings_store import SettingsStore
+from engine.dto.key_combination import KeyCombination
 from engine.interfaces.keyboard_layout_registry_interface import KeyboardLayoutRegistryInterface
+from engine.keyboard_layout_manager import KeyboardLayoutManager
+from engine.keyboard_layout_manager_setup import KeyboardLayoutManagerSetup
 
 
-class UnifiedHotkeyEdit(QWidget):
-    """Unified widget to capture both standard hotkeys and modifier-only combinations"""
+class HotkeyEdit(QLineEdit):
+    """Inline hotkey capture field. Click it and press a combination —
+    modifier-only combos (Alt+Shift) are allowed. Produces canonical
+    keyboard-library strings like 'alt+shift+g'."""
+
+    capture_started = Signal()
+    capture_finished = Signal()
+
+    _MODIFIER_KEYS = (
+        Qt.Key.Key_Control, Qt.Key.Key_Alt, Qt.Key.Key_Shift,
+        Qt.Key.Key_Meta, Qt.Key.Key_AltGr,
+    )
+
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.layout = QVBoxLayout(self)
-        self.layout.setContentsMargins(0, 0, 0, 0)
+        self.setReadOnly(True)
+        self.setPlaceholderText("—")
+        self.setToolTip("Кликните и нажмите комбинацию клавиш")
+        self._hotkey = ""
 
-        # Create the edit field
-        self.edit = QLineEdit()
-        self.edit.setReadOnly(True)
-        self.edit.setPlaceholderText("Press any key combination (including modifier-only)")
-        self.layout.addWidget(self.edit)
+    def hotkey(self) -> str:
+        return self._hotkey
 
-        # Set focus policy to make widget focusable
-        self.setFocusPolicy(Qt.StrongFocus)
-
-        # Initialize state variables
-        self.modifiers = Qt.KeyboardModifier.NoModifier
-        self.key = None
-        self.modifier_only = False
-
-        # Variables to store the last valid hotkey state
-        self.last_modifiers = Qt.KeyboardModifier.NoModifier
-        self.last_key = None
-        self.last_modifier_only = False
-        self.hotkey_set = False
-
-        self.updateText()
+    def set_hotkey(self, hotkey: str):
+        self._hotkey = hotkey or ""
+        self._render()
 
     def focusInEvent(self, event):
-        # When widget gets focus, prepare for new input but don't clear the display
-        # if a valid hotkey has been set
-        self.edit.setFocus()
-
-        # Reset current state for new input, but preserve last valid state
-        self.modifiers = Qt.KeyboardModifier.NoModifier
-        self.key = None
-
-        # Update the display - this will show the last valid hotkey if one is set
-        self.updateText()
-
         super().focusInEvent(event)
+        self.setPlaceholderText("нажмите комбинацию…")
+        self.capture_started.emit()
+
+    def focusOutEvent(self, event):
+        super().focusOutEvent(event)
+        self.setPlaceholderText("—")
+        self._render()
+        self.capture_finished.emit()
 
     def keyPressEvent(self, event: QKeyEvent):
-        # Capture the key press
-        self.modifiers = event.modifiers()
-
-        # Check if it's a modifier key
-        if event.key() in (Qt.Key.Key_Control, Qt.Key.Key_Alt, Qt.Key.Key_Shift,
-                          Qt.Key.Key_Meta, Qt.Key.Key_AltGr):
-            # It's a modifier key, so we're potentially in modifier-only mode
-            self.modifier_only = True
-            self.key = None
-
-            # Update last valid state for modifier-only hotkeys
-            if self.modifiers != Qt.KeyboardModifier.NoModifier:
-                self.last_modifiers = self.modifiers
-                self.last_key = None
-                self.last_modifier_only = True
-                self.hotkey_set = True
-        else:
-            # It's a regular key, so we're in standard hotkey mode
-            self.modifier_only = False
-            self.key = event.key()
-
-            # Update last valid state for standard hotkeys
-            if self.modifiers != Qt.KeyboardModifier.NoModifier or event.key() != Qt.Key.Key_unknown:
-                self.last_modifiers = self.modifiers
-                self.last_key = self.key
-                self.last_modifier_only = False
-                self.hotkey_set = True
-
-        self.updateText()
-        event.accept()
-
-    def keyReleaseEvent(self, event: QKeyEvent):
-        # Update current modifiers on key release
-        self.modifiers = event.modifiers()
-
-        # If all keys are released, we should display the last valid hotkey
-        # but continue tracking current key state for new input
-        if self.modifiers == Qt.KeyboardModifier.NoModifier and event.key() != Qt.Key.Key_unknown:
-            # Clear current key state for new input
-            self.key = None
-
-            # We don't reset self.modifiers or self.modifier_only here
-            # because we want to keep tracking new input
-
-            # The last valid state (self.last_modifiers, self.last_key, self.last_modifier_only)
-            # is preserved and will be used for display
-
-        self.updateText()
-        event.accept()
-
-    def updateText(self):
-        """Update the displayed text based on current key combination or last valid hotkey"""
-        # If we're currently pressing keys, show the current state
-        if self.modifiers != Qt.KeyboardModifier.NoModifier or self.key:
-            text = []
-
-            # Add modifiers
-            if self.modifiers & Qt.KeyboardModifier.ControlModifier:
-                text.append("Ctrl")
-            if self.modifiers & Qt.KeyboardModifier.AltModifier:
-                text.append("Alt")
-            if self.modifiers & Qt.KeyboardModifier.ShiftModifier:
-                text.append("Shift")
-            if self.modifiers & Qt.KeyboardModifier.MetaModifier:
-                text.append("Meta")
-
-            # Add the key if it's not a modifier-only hotkey
-            if not self.modifier_only and self.key:
-                key_text = QKeySequence(self.key).toString()
-                if key_text:
-                    text.append(key_text)
-
-            self.edit.setText("+".join(text) if text else "")
-
-        # If no keys are currently pressed but we have a valid hotkey set,
-        # show the last valid hotkey
-        elif self.hotkey_set:
-            text = []
-
-            # Add last valid modifiers
-            if self.last_modifiers & Qt.KeyboardModifier.ControlModifier:
-                text.append("Ctrl")
-            if self.last_modifiers & Qt.KeyboardModifier.AltModifier:
-                text.append("Alt")
-            if self.last_modifiers & Qt.KeyboardModifier.ShiftModifier:
-                text.append("Shift")
-            if self.last_modifiers & Qt.KeyboardModifier.MetaModifier:
-                text.append("Meta")
-
-            # Add the last valid key if it's not a modifier-only hotkey
-            if not self.last_modifier_only and self.last_key:
-                key_text = QKeySequence(self.last_key).toString()
-                if key_text:
-                    text.append(key_text)
-
-            self.edit.setText("+".join(text) if text else "")
-
-        # If no keys are pressed and no valid hotkey is set, clear the text
-        else:
-            self.edit.setText("")
-
-    def getHotkey(self):
-        """Return the current hotkey as text"""
-        # The edit field will always show the correct hotkey text
-        # thanks to our updateText method
-        return self.edit.text()
-
-    def setHotkey(self, text):
-        """Set hotkey from text representation"""
-        if not text:
-            # Clear both current and last valid states
-            self.modifiers = Qt.KeyboardModifier.NoModifier
-            self.key = None
-            self.modifier_only = False
-            self.last_modifiers = Qt.KeyboardModifier.NoModifier
-            self.last_key = None
-            self.last_modifier_only = False
-            self.hotkey_set = False
-            self.updateText()
+        if event.key() == Qt.Key.Key_Escape and event.modifiers() == Qt.KeyboardModifier.NoModifier:
+            self.clearFocus()
+            event.accept()
             return
 
-        parts = text.split("+")
+        key = event.key()
+        modifiers = event.modifiers()
+        pressed_modifiers = {
+            "ctrl": bool(modifiers & Qt.KeyboardModifier.ControlModifier) or key == Qt.Key.Key_Control,
+            "alt": bool(modifiers & Qt.KeyboardModifier.AltModifier) or key in (Qt.Key.Key_Alt, Qt.Key.Key_AltGr),
+            "shift": bool(modifiers & Qt.KeyboardModifier.ShiftModifier) or key == Qt.Key.Key_Shift,
+            "windows": bool(modifiers & Qt.KeyboardModifier.MetaModifier) or key == Qt.Key.Key_Meta,
+        }
+        parts = [name for name, pressed in pressed_modifiers.items() if pressed]
 
-        # Check if it's a modifier-only hotkey
-        is_modifier_only = all(part.lower() in ["ctrl", "alt", "shift", "meta"] for part in parts)
+        if key not in self._MODIFIER_KEYS and key != Qt.Key.Key_unknown:
+            key_text = QKeySequence(key).toString()
+            if key_text:
+                parts.append(key_text.lower())
 
-        # Reset both current and last valid states
-        self.modifiers = Qt.KeyboardModifier.NoModifier
-        self.key = None
-        self.last_modifiers = Qt.KeyboardModifier.NoModifier
-        self.last_key = None
+        if parts:
+            self._hotkey = "+".join(parts)
+            self._render()
 
-        # Process each part
-        for part in parts:
-            part_lower = part.lower()
-            if part_lower == "ctrl":
-                self.modifiers |= Qt.KeyboardModifier.ControlModifier
-                self.last_modifiers |= Qt.KeyboardModifier.ControlModifier
-            elif part_lower == "alt":
-                self.modifiers |= Qt.KeyboardModifier.AltModifier
-                self.last_modifiers |= Qt.KeyboardModifier.AltModifier
-            elif part_lower == "shift":
-                self.modifiers |= Qt.KeyboardModifier.ShiftModifier
-                self.last_modifiers |= Qt.KeyboardModifier.ShiftModifier
-            elif part_lower == "meta":
-                self.modifiers |= Qt.KeyboardModifier.MetaModifier
-                self.last_modifiers |= Qt.KeyboardModifier.MetaModifier
-            elif not is_modifier_only:
-                # It's a regular key
-                key_code = QKeySequence(part)[0]
-                self.key = key_code
-                self.last_key = key_code
+        event.accept()
 
-        # Set modifier_only flag for both current and last valid states
-        self.modifier_only = is_modifier_only
-        self.last_modifier_only = is_modifier_only
-
-        # Mark that a valid hotkey has been set
-        self.hotkey_set = True
-
-        self.updateText()
+    def _render(self):
+        self.setText("+".join(part.capitalize() for part in self._hotkey.split("+")) if self._hotkey else "")
 
 
-class HotkeyDialog(QDialog):
-    def __init__(self, parent=None, current_hotkey=None):
-        super().__init__(parent)
-        self.setWindowTitle("Configure Hotkey")
-
-        # Create layout
-        layout = QVBoxLayout(self)
-
-        # Add instruction label
-        layout.addWidget(QLabel("Press any key combination (including modifier-only like Ctrl+Alt):"))
-
-        # Add unified hotkey edit control
-        self.hotkey_edit = UnifiedHotkeyEdit(self)
-        if current_hotkey:
-            self.hotkey_edit.setHotkey(current_hotkey)
-        layout.addWidget(self.hotkey_edit)
-
-        # Add buttons
-        button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
-        button_box.accepted.connect(self.accept)
-        button_box.rejected.connect(self.reject)
-        layout.addWidget(button_box)
-
-        self.setMinimumWidth(400)
-        self.setMinimumHeight(200)
-
-    def get_hotkey(self):
-        return self.hotkey_edit.getHotkey()
+class _LayoutRow:
+    def __init__(self, layout):
+        self.klid = layout.layout_id
+        self.checkbox = QCheckBox(layout.layout_name)
+        self.checkbox.setToolTip(f"KLID: {layout.layout_id.to_string}")
+        self.hotkey_edit = HotkeyEdit()
+        self.clear_button = QToolButton()
+        self.clear_button.setText("✕")
+        self.clear_button.setToolTip("Убрать прямой хоткей")
+        self.clear_button.clicked.connect(lambda: self.hotkey_edit.set_hotkey(""))
 
 
 class SettingsWindow(QWidget):
-    def __init__(self, registry: KeyboardLayoutRegistryInterface):
-        super().__init__()
-        self.setWindowTitle("Настройки")
-        self.registry = registry
-        self.layout_checkboxes = []
-        self.hotkey_buttons = {}  # Dictionary to store hotkey buttons
-        self.layout_hotkeys = {}  # Dictionary to store hotkeys for each layout ID
+    settings_applied = Signal()
 
+    def __init__(
+            self,
+            registry: KeyboardLayoutRegistryInterface,
+            setup: KeyboardLayoutManagerSetup,
+            settings_store: SettingsStore,
+            manager: KeyboardLayoutManager,
+            autostart: Autostart,
+    ):
+        super().__init__()
+        self._registry = registry
+        self._setup = setup
+        self._settings_store = settings_store
+        self._manager = manager
+        self._autostart = autostart
+        self._rows: list[_LayoutRow] = []
+
+        self.setWindowTitle("Glossa — настройки")
+        self._build_ui()
+
+    def showEvent(self, event):
+        self._load_state()
+        super().showEvent(event)
+
+    # --- UI construction ---
+
+    def _build_ui(self):
         main_layout = QVBoxLayout(self)
 
-        # Create a label
-        main_layout.addWidget(QLabel("Выберите раскладки клавиатуры:"))
+        carousel_group = QGroupBox("Карусель переключения")
+        carousel_layout = QVBoxLayout(carousel_group)
+        hotkey_row = QHBoxLayout()
+        hotkey_row.addWidget(QLabel("Хоткей:"))
+        self._carousel_hotkey_edit = HotkeyEdit()
+        hotkey_row.addWidget(self._carousel_hotkey_edit, stretch=1)
+        carousel_layout.addLayout(hotkey_row)
+        hint = QLabel("Перебирает раскладки, отмеченные галочкой ниже.")
+        hint.setStyleSheet("color: gray;")
+        carousel_layout.addWidget(hint)
+        main_layout.addWidget(carousel_group)
 
-        # Create a scroll area for checkboxes and hotkey buttons
-        scroll_area = QScrollArea()
-        scroll_area.setWidgetResizable(True)
-        scroll_content = QWidget()
-        scroll_layout = QVBoxLayout(scroll_content)
+        layouts_group = QGroupBox("Раскладки")
+        self._layouts_grid = QGridLayout(layouts_group)
+        self._layouts_grid.setColumnStretch(0, 1)
+        header_carousel = QLabel("В карусели")
+        header_hotkey = QLabel("Прямой хоткей")
+        header_carousel.setStyleSheet("color: gray;")
+        header_hotkey.setStyleSheet("color: gray;")
+        self._layouts_grid.addWidget(header_carousel, 0, 0)
+        self._layouts_grid.addWidget(header_hotkey, 0, 1)
+        main_layout.addWidget(layouts_group)
 
-        # Add checkboxes and hotkey buttons for each layout
-        for layout in self.registry.layouts():
-            # Create horizontal layout for each row
-            row_layout = QHBoxLayout()
+        self._autostart_checkbox = QCheckBox("Запускать при входе в Windows")
+        main_layout.addWidget(self._autostart_checkbox)
 
-            # Add checkbox
-            checkbox = QCheckBox(layout.layout_name)
-            # Store the layout ID as a property of the checkbox
-            layout_id = layout.layout_id.to_string
-            checkbox.setProperty("layout_id", layout_id)
-            self.layout_checkboxes.append(checkbox)
-            row_layout.addWidget(checkbox)
+        main_layout.addStretch(1)
 
-            # Add hotkey button
-            hotkey_btn = QPushButton("Configure Hotkey")
-            hotkey_btn.clicked.connect(lambda checked, lid=layout_id: self.configure_hotkey(lid))
-            self.hotkey_buttons[layout_id] = hotkey_btn
-            row_layout.addWidget(hotkey_btn)
-
-            # Add row to scroll layout
-            scroll_layout.addLayout(row_layout)
-
-        scroll_content.setLayout(scroll_layout)
-        scroll_area.setWidget(scroll_content)
-        main_layout.addWidget(scroll_area)
-
-        # Create buttons layout
         buttons_layout = QHBoxLayout()
-
-        # Add Show button
-        show_btn = QPushButton("Show")
-        show_btn.clicked.connect(self.show_selected_layouts)
-        buttons_layout.addWidget(show_btn)
-
-        # Add Close button
-        close_btn = QPushButton("Закрыть")
-        close_btn.clicked.connect(self.close)
-        buttons_layout.addWidget(close_btn)
-
+        feedback_label = QLabel(
+            '<a href="mailto:astislav+glossa@gmail.com?subject=Glossa" '
+            'style="color: gray; text-decoration: none;">написать автору</a>'
+        )
+        feedback_label.setOpenExternalLinks(True)
+        feedback_label.setToolTip("Astislav Bozhevolnov · astislav+glossa@gmail.com")
+        small_font = feedback_label.font()
+        small_font.setPointSizeF(small_font.pointSizeF() * 0.85)
+        feedback_label.setFont(small_font)
+        buttons_layout.addWidget(feedback_label)
+        buttons_layout.addStretch(1)
+        save_button = QPushButton("Сохранить")
+        save_button.setDefault(True)
+        save_button.clicked.connect(self._on_save)
+        cancel_button = QPushButton("Отмена")
+        cancel_button.clicked.connect(self.close)
+        buttons_layout.addWidget(save_button)
+        buttons_layout.addWidget(cancel_button)
         main_layout.addLayout(buttons_layout)
-        self.setMinimumSize(400, 300)
 
-    def configure_hotkey(self, layout_id):
-        """Open dialog to configure hotkey for the specified layout"""
-        current_hotkey = self.layout_hotkeys.get(layout_id, "")
-        dialog = HotkeyDialog(self, current_hotkey)
+        # While a capture field is focused, the global hook must not react
+        # to the combination being tried out.
+        self._connect_capture_pause(self._carousel_hotkey_edit)
 
-        if dialog.exec():
-            # Get the configured hotkey
-            hotkey = dialog.get_hotkey()
+        self.setMinimumWidth(420)
 
-            # Store the hotkey
-            if hotkey:
-                self.layout_hotkeys[layout_id] = hotkey
-                # Update button text to show the hotkey
-                self.hotkey_buttons[layout_id].setText(f"Hotkey: {hotkey}")
-            else:
-                # If hotkey is empty, remove it from the dictionary
-                if layout_id in self.layout_hotkeys:
-                    del self.layout_hotkeys[layout_id]
-                self.hotkey_buttons[layout_id].setText("Configure Hotkey")
+    def _connect_capture_pause(self, edit: HotkeyEdit):
+        edit.capture_started.connect(self._manager.pause_hotkeys)
+        edit.capture_finished.connect(self._manager.resume_hotkeys)
 
-    def show_selected_layouts(self):
-        """Display a popup with IDs and hotkeys of selected layouts"""
-        selected_layouts = []
+    def _rebuild_rows(self):
+        # The set of installed layouts can change while the app runs (the
+        # user adds a language in Windows settings) — rebuild on every open.
+        for row in self._rows:
+            for widget in (row.checkbox, row.hotkey_edit, row.clear_button):
+                self._layouts_grid.removeWidget(widget)
+                widget.deleteLater()
+        self._rows.clear()
 
-        # Collect IDs and hotkeys of selected layouts
-        for checkbox in self.layout_checkboxes:
-            if checkbox.isChecked():
-                layout_id = checkbox.property("layout_id")
-                hotkey = self.layout_hotkeys.get(layout_id, "Not configured")
-                selected_layouts.append(f"{layout_id} - Hotkey: {hotkey}")
+        for row_index, layout in enumerate(self._registry.layouts(), start=1):
+            row = _LayoutRow(layout)
+            self._rows.append(row)
+            self._layouts_grid.addWidget(row.checkbox, row_index, 0)
+            self._layouts_grid.addWidget(row.hotkey_edit, row_index, 1)
+            self._layouts_grid.addWidget(row.clear_button, row_index, 2)
+            self._connect_capture_pause(row.hotkey_edit)
 
-        # Create message text
-        if selected_layouts:
-            message = "Selected layouts:\n" + "\n".join(selected_layouts)
+    # --- state <-> widgets ---
+
+    def _load_state(self):
+        self._rebuild_rows()
+        self._carousel_hotkey_edit.set_hotkey(self._setup.next_layout_in_loop_hotkey.to_hotkey_string())
+
+        in_loop = {klid.to_string for klid in self._setup.in_loop_keyboard_layout_ids}
+        bindings = {klid.to_string: hotkey.to_hotkey_string()
+                    for klid, hotkey in self._setup.klid_to_hotkey_bindings.items()}
+
+        for row in self._rows:
+            row.checkbox.setChecked(row.klid.to_string in in_loop)
+            row.hotkey_edit.set_hotkey(bindings.get(row.klid.to_string, ""))
+
+        self._autostart_checkbox.setChecked(self._autostart.is_enabled())
+
+    def _on_save(self):
+        carousel_hotkey = self._carousel_hotkey_edit.hotkey()
+        if not carousel_hotkey:
+            QMessageBox.warning(self, "Настройки", "Задайте хоткей карусели.")
+            return
+
+        carousel_klids = [row.klid for row in self._rows if row.checkbox.isChecked()]
+        if not carousel_klids:
+            QMessageBox.warning(self, "Настройки", "Отметьте хотя бы одну раскладку для карусели.")
+            return
+
+        bindings = {row.klid: row.hotkey_edit.hotkey() for row in self._rows if row.hotkey_edit.hotkey()}
+
+        duplicate = self._find_exact_duplicate(carousel_hotkey, bindings)
+        if duplicate:
+            QMessageBox.warning(
+                self, "Настройки",
+                f"Хоткей «{duplicate}» назначен дважды. Точные дубли запрещены\n"
+                f"(расширенные комбинации вроде Alt+Shift и Alt+Shift+G — можно)."
+            )
+            return
+
+        if len(carousel_klids) == 1:
+            answer = QMessageBox.question(
+                self, "Настройки",
+                "В карусели только одна раскладка — хоткей карусели будет просто включать её. Сохранить?"
+            )
+            if answer != QMessageBox.StandardButton.Yes:
+                return
+
+        self._setup.next_layout_in_loop_hotkey = KeyCombination.from_hotkey_string(carousel_hotkey)
+        self._setup.in_loop_keyboard_layout_ids = carousel_klids
+        self._setup.klid_to_hotkey_bindings = {
+            klid: KeyCombination.from_hotkey_string(hotkey) for klid, hotkey in bindings.items()
+        }
+
+        self._settings_store.save()
+        self._manager.reload()
+
+        if self._autostart_checkbox.isChecked():
+            self._autostart.enable()
         else:
-            message = "No layouts selected"
+            self._autostart.disable()
 
-        # Show popup
-        QMessageBox.information(self, "Selected Layouts", message)
+        self.settings_applied.emit()
+        self.close()
+
+    @staticmethod
+    def _find_exact_duplicate(carousel_hotkey: str, bindings: dict) -> str | None:
+        seen: dict[frozenset, str] = {}
+        for hotkey in [carousel_hotkey, *bindings.values()]:
+            combo = KeyCombination.from_hotkey_string(hotkey).as_frozenset()
+            if combo in seen:
+                return hotkey
+            seen[combo] = hotkey
+        return None

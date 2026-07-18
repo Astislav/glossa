@@ -9,6 +9,10 @@ class KeyboardHookInterface(ABC):
         pass
 
     @abstractmethod
+    def unregister_all(self):
+        pass
+
+    @abstractmethod
     def start(self):
         pass
 

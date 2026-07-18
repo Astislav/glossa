@@ -11,3 +11,8 @@ class ManagerLogger(NamedLogger):
 @singleton
 class SwitcherLogger(NamedLogger):
     name = "ls.switcher"
+
+
+@singleton
+class HookLogger(NamedLogger):
+    name = "ls.hook"

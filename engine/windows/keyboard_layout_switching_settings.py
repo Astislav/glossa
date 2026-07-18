@@ -4,6 +4,7 @@ from ctypes import wintypes
 
 from injector import singleton
 
+from engine.dto.key_combination import KeyCombination
 from engine.interfaces.keyboard_layout_switching_system_settings_interface import KeyboardLayoutSwitchingSystemSettingsInterface
 
 
@@ -41,6 +42,22 @@ class WindowsKeyboardLayoutSwitchingSettings(KeyboardLayoutSwitchingSystemSettin
                 winreg.SetValueEx(k, self._layout_hotkey_reg_name, 0, winreg.REG_SZ, self._layout_hot_key_id)
 
         self._notify()
+
+    def system_switch_hotkey(self) -> KeyCombination | None:
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, self._layout_toggle_branch) as k:
+            value = self._get_registry_value(k, self._language_hotkey_reg_name)
+
+        return self._hotkey_from_toggle_value(value)
+
+    @staticmethod
+    def _hotkey_from_toggle_value(value: str | None) -> KeyCombination | None:
+        # HKCU\Keyboard Layout\Toggle, "Language Hotkey": 1 = Alt+Shift,
+        # 2 = Ctrl+Shift, 3 = disabled, 4 = grave accent (not a combo we host).
+        if value == "1":
+            return KeyCombination.from_hotkey_string("alt+shift")
+        if value == "2":
+            return KeyCombination.from_hotkey_string("ctrl+shift")
+        return None
 
     def _notify(self):
         buffer = ctypes.create_unicode_buffer("Keyboard Layout")

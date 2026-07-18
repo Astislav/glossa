@@ -55,11 +55,13 @@ class KeyboardLayoutManagerSetup:
 
     @klid_to_hotkey_bindings.setter
     def klid_to_hotkey_bindings(self, klid_to_hotkey_bindings: dict[KeyboardLayoutId, KeyCombination]):
-        for klid, key in klid_to_hotkey_bindings.items():
+        for klid in klid_to_hotkey_bindings:
             if not self._keyboard_layout_registry.layout_exists(klid):
                 raise ValueError(f"Invalid klid: {klid}")
 
-            self._klid_to_hotkey_bindings[klid] = key
+        # Full replacement, not a merge — a binding removed in the UI must
+        # actually disappear.
+        self._klid_to_hotkey_bindings = dict(klid_to_hotkey_bindings)
 
     @property
     def in_loop_keyboard_layout_ids(self) -> list[KeyboardLayoutId]:

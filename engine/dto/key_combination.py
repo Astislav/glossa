@@ -1,4 +1,6 @@
 class KeyCombination:
+    _MODIFIER_ORDER = ("ctrl", "alt", "shift", "windows")
+
     def __init__(self, keys: frozenset[str]):
         self._keys = keys
 
@@ -9,7 +11,12 @@ class KeyCombination:
         return cls(keys)
 
     def to_hotkey_string(self) -> str:
-        return "+".join(self._keys)
+        # Canonical order: modifiers first, then the remaining keys sorted —
+        # stable output for the settings file and the UI.
+        modifiers = [k for k in self._MODIFIER_ORDER if k in self._keys]
+        others = sorted(self._keys - set(self._MODIFIER_ORDER))
+
+        return "+".join(modifiers + others)
 
     def as_frozenset(self) -> frozenset[str]:
         return self._keys

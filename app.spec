@@ -4,9 +4,41 @@
 #   BUNDLED  — packed INTO the executable, read via Root.internal(...)
 #   EXTERNAL — shipped NEXT TO the executable by nexus-kit build:
 #              .env(.example), resources/ — read via Root.external(...)
+import tomllib
 from pathlib import Path
 
+from PyInstaller.utils.win32.versioninfo import (
+    FixedFileInfo, StringFileInfo, StringStruct, StringTable, VarFileInfo, VarStruct, VSVersionInfo,
+)
+
 ROOT = Path(SPECPATH)  # noqa: F821 — SPECPATH is provided by PyInstaller
+
+APP_VERSION = tomllib.loads((ROOT / "pyproject.toml").read_text("utf-8"))["project"]["version"]
+
+
+def version_tuple(version: str) -> tuple:
+    parts = [int(p) for p in version.split(".")]
+    return tuple((parts + [0, 0, 0, 0])[:4])
+
+
+# Proper version metadata: visible in file Properties, and its absence is a
+# heuristic red flag for antivirus scanners.
+VERSION_INFO = VSVersionInfo(
+    ffi=FixedFileInfo(filevers=version_tuple(APP_VERSION), prodvers=version_tuple(APP_VERSION)),
+    kids=[
+        StringFileInfo([StringTable("040904B0", [
+            StringStruct("CompanyName", "Astislav Bozhevolnov"),
+            StringStruct("FileDescription", "Glossa — keyboard layout carousel for polyglots"),
+            StringStruct("FileVersion", APP_VERSION),
+            StringStruct("InternalName", "Glossa"),
+            StringStruct("LegalCopyright", "MIT License, Astislav Bozhevolnov"),
+            StringStruct("OriginalFilename", "Glossa.exe"),
+            StringStruct("ProductName", "Glossa"),
+            StringStruct("ProductVersion", APP_VERSION),
+        ])]),
+        VarFileInfo([VarStruct("Translation", [1033, 1200])]),
+    ],
+)
 
 
 def bundled(src: str, dest: str | None = None) -> tuple[str, str]:
@@ -40,6 +72,7 @@ exe = EXE(  # noqa: F821
     name="Glossa",
     console=False,  # tray app — no console window; stdout logging goes nowhere by design
     icon=str(ROOT / "resources" / "icon.ico"),
+    version=VERSION_INFO,
     upx=False,
     runtime_tmpdir=None,  # onefile: unpacks to _MEIPASS — the Root.internal(...) base
 )

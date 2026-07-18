@@ -59,7 +59,10 @@ class Application(ApplicationInterface):
 
         tray_icon.setContextMenu(tray_menu)
         tray_icon.activated.connect(
-            lambda reason: show_settings() if reason == QSystemTrayIcon.ActivationReason.DoubleClick else None
+            lambda reason: show_settings() if reason in (
+                QSystemTrayIcon.ActivationReason.Trigger,        # left click
+                QSystemTrayIcon.ActivationReason.DoubleClick,
+            ) else None
         )
         settings_window.settings_applied.connect(
             lambda: tray_icon.showMessage(self._env.APP_NAME, "Settings applied")

@@ -1,5 +1,5 @@
-from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QKeyEvent, QKeySequence
+from PySide6.QtCore import Qt, QTimer, Signal
+from PySide6.QtGui import QGuiApplication, QKeyEvent, QKeySequence
 from PySide6.QtWidgets import (
     QCheckBox, QGridLayout, QGroupBox, QHBoxLayout, QLabel, QLineEdit,
     QMessageBox, QPushButton, QToolButton, QVBoxLayout, QWidget,
@@ -97,6 +97,11 @@ class _LayoutRow:
 class SettingsWindow(QWidget):
     settings_applied = Signal()
 
+    _FEEDBACK_EMAIL = "astislav+glossa@gmail.com"
+    # A mailto: link is a dead end on machines without a mail client (it
+    # just opens a blank browser) — copy the address instead.
+    _FEEDBACK_LINK = '<a href="copy" style="color: gray; text-decoration: none;">email the author</a>'
+
     def __init__(
             self,
             registry: KeyboardLayoutRegistryInterface,
@@ -154,16 +159,13 @@ class SettingsWindow(QWidget):
         main_layout.addStretch(1)
 
         buttons_layout = QHBoxLayout()
-        feedback_label = QLabel(
-            '<a href="mailto:astislav+glossa@gmail.com?subject=Glossa" '
-            'style="color: gray; text-decoration: none;">email the author</a>'
-        )
-        feedback_label.setOpenExternalLinks(True)
-        feedback_label.setToolTip("Astislav Bozhevolnov · astislav+glossa@gmail.com")
-        small_font = feedback_label.font()
+        self._feedback_label = QLabel(self._FEEDBACK_LINK)
+        self._feedback_label.setToolTip(f"Astislav Bozhevolnov · {self._FEEDBACK_EMAIL}\nClick to copy the address")
+        self._feedback_label.linkActivated.connect(self._copy_feedback_address)
+        small_font = self._feedback_label.font()
         small_font.setPointSizeF(small_font.pointSizeF() * 0.85)
-        feedback_label.setFont(small_font)
-        buttons_layout.addWidget(feedback_label)
+        self._feedback_label.setFont(small_font)
+        buttons_layout.addWidget(self._feedback_label)
         buttons_layout.addStretch(1)
         save_button = QPushButton("Save")
         save_button.setDefault(True)
@@ -263,6 +265,11 @@ class SettingsWindow(QWidget):
 
         self.settings_applied.emit()
         self.close()
+
+    def _copy_feedback_address(self):
+        QGuiApplication.clipboard().setText(self._FEEDBACK_EMAIL)
+        self._feedback_label.setText(f'<span style="color: gray;">{self._FEEDBACK_EMAIL} — copied</span>')
+        QTimer.singleShot(2500, lambda: self._feedback_label.setText(self._FEEDBACK_LINK))
 
     @staticmethod
     def _find_exact_duplicate(carousel_hotkey: str, bindings: dict) -> str | None:

@@ -50,8 +50,8 @@ class Application(ApplicationInterface):
         tray_icon.setToolTip(self._env.APP_NAME)
         tray_menu = QMenu()
 
-        action_settings = QAction("Настройки", triggered=show_settings)
-        action_quit = QAction("Выход", triggered=app.quit)
+        action_settings = QAction("Settings", triggered=show_settings)
+        action_quit = QAction("Quit", triggered=app.quit)
 
         tray_menu.addAction(action_settings)
         tray_menu.addSeparator()
@@ -62,7 +62,7 @@ class Application(ApplicationInterface):
             lambda reason: show_settings() if reason == QSystemTrayIcon.ActivationReason.DoubleClick else None
         )
         settings_window.settings_applied.connect(
-            lambda: tray_icon.showMessage(self._env.APP_NAME, "Настройки применены")
+            lambda: tray_icon.showMessage(self._env.APP_NAME, "Settings applied")
         )
         tray_icon.show()
 

@@ -30,7 +30,7 @@ class HotkeyEdit(QLineEdit):
         super().__init__(parent)
         self.setReadOnly(True)
         self.setPlaceholderText("—")
-        self.setToolTip("Кликните и нажмите комбинацию клавиш")
+        self.setToolTip("Click and press a key combination")
         self._hotkey = ""
 
     def hotkey(self) -> str:
@@ -42,7 +42,7 @@ class HotkeyEdit(QLineEdit):
 
     def focusInEvent(self, event):
         super().focusInEvent(event)
-        self.setPlaceholderText("нажмите комбинацию…")
+        self.setPlaceholderText("press a combination…")
         self.capture_started.emit()
 
     def focusOutEvent(self, event):
@@ -90,7 +90,7 @@ class _LayoutRow:
         self.hotkey_edit = HotkeyEdit()
         self.clear_button = QToolButton()
         self.clear_button.setText("✕")
-        self.clear_button.setToolTip("Убрать прямой хоткей")
+        self.clear_button.setToolTip("Clear the direct hotkey")
         self.clear_button.clicked.connect(lambda: self.hotkey_edit.set_hotkey(""))
 
 
@@ -113,7 +113,7 @@ class SettingsWindow(QWidget):
         self._autostart = autostart
         self._rows: list[_LayoutRow] = []
 
-        self.setWindowTitle("Glossa — настройки")
+        self.setWindowTitle("Glossa — Settings")
         self._build_ui()
 
     def showEvent(self, event):
@@ -125,30 +125,30 @@ class SettingsWindow(QWidget):
     def _build_ui(self):
         main_layout = QVBoxLayout(self)
 
-        carousel_group = QGroupBox("Карусель переключения")
+        carousel_group = QGroupBox("Carousel")
         carousel_layout = QVBoxLayout(carousel_group)
         hotkey_row = QHBoxLayout()
-        hotkey_row.addWidget(QLabel("Хоткей:"))
+        hotkey_row.addWidget(QLabel("Hotkey:"))
         self._carousel_hotkey_edit = HotkeyEdit()
         hotkey_row.addWidget(self._carousel_hotkey_edit, stretch=1)
         carousel_layout.addLayout(hotkey_row)
-        hint = QLabel("Перебирает раскладки, отмеченные галочкой ниже.")
+        hint = QLabel("Cycles through the layouts checked below.")
         hint.setStyleSheet("color: gray;")
         carousel_layout.addWidget(hint)
         main_layout.addWidget(carousel_group)
 
-        layouts_group = QGroupBox("Раскладки")
+        layouts_group = QGroupBox("Layouts")
         self._layouts_grid = QGridLayout(layouts_group)
         self._layouts_grid.setColumnStretch(0, 1)
-        header_carousel = QLabel("В карусели")
-        header_hotkey = QLabel("Прямой хоткей")
+        header_carousel = QLabel("In carousel")
+        header_hotkey = QLabel("Direct hotkey")
         header_carousel.setStyleSheet("color: gray;")
         header_hotkey.setStyleSheet("color: gray;")
         self._layouts_grid.addWidget(header_carousel, 0, 0)
         self._layouts_grid.addWidget(header_hotkey, 0, 1)
         main_layout.addWidget(layouts_group)
 
-        self._autostart_checkbox = QCheckBox("Запускать при входе в Windows")
+        self._autostart_checkbox = QCheckBox("Start with Windows")
         main_layout.addWidget(self._autostart_checkbox)
 
         main_layout.addStretch(1)
@@ -156,7 +156,7 @@ class SettingsWindow(QWidget):
         buttons_layout = QHBoxLayout()
         feedback_label = QLabel(
             '<a href="mailto:astislav+glossa@gmail.com?subject=Glossa" '
-            'style="color: gray; text-decoration: none;">написать автору</a>'
+            'style="color: gray; text-decoration: none;">email the author</a>'
         )
         feedback_label.setOpenExternalLinks(True)
         feedback_label.setToolTip("Astislav Bozhevolnov · astislav+glossa@gmail.com")
@@ -165,10 +165,10 @@ class SettingsWindow(QWidget):
         feedback_label.setFont(small_font)
         buttons_layout.addWidget(feedback_label)
         buttons_layout.addStretch(1)
-        save_button = QPushButton("Сохранить")
+        save_button = QPushButton("Save")
         save_button.setDefault(True)
         save_button.clicked.connect(self._on_save)
-        cancel_button = QPushButton("Отмена")
+        cancel_button = QPushButton("Cancel")
         cancel_button.clicked.connect(self.close)
         buttons_layout.addWidget(save_button)
         buttons_layout.addWidget(cancel_button)
@@ -220,12 +220,12 @@ class SettingsWindow(QWidget):
     def _on_save(self):
         carousel_hotkey = self._carousel_hotkey_edit.hotkey()
         if not carousel_hotkey:
-            QMessageBox.warning(self, "Настройки", "Задайте хоткей карусели.")
+            QMessageBox.warning(self, "Settings", "Set the carousel hotkey.")
             return
 
         carousel_klids = [row.klid for row in self._rows if row.checkbox.isChecked()]
         if not carousel_klids:
-            QMessageBox.warning(self, "Настройки", "Отметьте хотя бы одну раскладку для карусели.")
+            QMessageBox.warning(self, "Settings", "Check at least one layout for the carousel.")
             return
 
         bindings = {row.klid: row.hotkey_edit.hotkey() for row in self._rows if row.hotkey_edit.hotkey()}
@@ -233,16 +233,16 @@ class SettingsWindow(QWidget):
         duplicate = self._find_exact_duplicate(carousel_hotkey, bindings)
         if duplicate:
             QMessageBox.warning(
-                self, "Настройки",
-                f"Хоткей «{duplicate}» назначен дважды. Точные дубли запрещены\n"
-                f"(расширенные комбинации вроде Alt+Shift и Alt+Shift+G — можно)."
+                self, "Settings",
+                f"Hotkey \"{duplicate}\" is assigned twice. Exact duplicates are not allowed\n"
+                f"(extended combos like Alt+Shift and Alt+Shift+G are fine)."
             )
             return
 
         if len(carousel_klids) == 1:
             answer = QMessageBox.question(
-                self, "Настройки",
-                "В карусели только одна раскладка — хоткей карусели будет просто включать её. Сохранить?"
+                self, "Settings",
+                "Only one layout is in the carousel — the carousel hotkey will simply activate it. Save anyway?"
             )
             if answer != QMessageBox.StandardButton.Yes:
                 return

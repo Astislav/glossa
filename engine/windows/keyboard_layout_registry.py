@@ -1,10 +1,13 @@
 import winreg
 
+from injector import singleton
+
 from engine.dto.keyboard_layout import KeyboardLayout
 from engine.interfaces.keyboard_layout_registry_interface import KeyboardLayoutRegistryInterface
 from engine.windows.keyboard_layout_id import WindowsKeyboardLayoutId
 
 
+@singleton
 class WindowsKeyboardLayoutsRegistry(KeyboardLayoutRegistryInterface):
     def layouts(self) -> list[KeyboardLayout]:
         klid_preload_branch = r"Keyboard Layout\\Preload"

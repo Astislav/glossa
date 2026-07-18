@@ -9,5 +9,9 @@ class KeyboardHookInterface(ABC):
         pass
 
     @abstractmethod
-    def process_events(self):
+    def start(self):
+        pass
+
+    @abstractmethod
+    def stop(self):
         pass

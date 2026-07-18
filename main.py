@@ -1,37 +1,18 @@
-import json
-import time
-from pathlib import Path
+import faulthandler
+import sys
 
-from engine.keyboard_hook import KeyboardHook
-from engine.keyboard_layout_manager import KeyboardLayoutManager
-from engine.keyboard_layout_manager_setup import KeyboardLayoutManagerSetup
-from engine.windows.keyboard_layout_registry import WindowsKeyboardLayoutsRegistry
-from engine.windows.keyboard_layout_switcher import WindowsKeyboardLayoutSwitcher
-from engine.windows.keyboard_layout_switching_settings import WindowsKeyboardLayoutSwitchingSettings
+from nexus_kit import Root
+from nexus_kit.impl import ContainerInjector
 
-SETTINGS_FILE = Path("settings\\settings.json")
+from app.application import Application
+from app.config.di import DI_CONFIG
+from app.config.environment import Environment
 
 if __name__ == "__main__":
-    settings = WindowsKeyboardLayoutSwitchingSettings()
-    registry = WindowsKeyboardLayoutsRegistry()
-    layout_switcher = WindowsKeyboardLayoutSwitcher(registry)
-    setup = KeyboardLayoutManagerSetup(registry)
+    if sys.stderr is not None:  # windowed builds (console=False) have no stderr
+        faulthandler.enable(all_threads=True)
 
-    if SETTINGS_FILE.exists():
-        setup.from_string(json.loads(SETTINGS_FILE.read_text()))
-    else:
-        SETTINGS_FILE.write_text(setup.to_string())
-
-    hook = KeyboardHook()
-
-    manager = KeyboardLayoutManager(setup, settings, layout_switcher, hook)
-    manager.start()
-
-    try:
-        while True:
-            time.sleep(1)
-    except KeyboardInterrupt:
-        pass
-
-    manager.stop()
-    manager.join(timeout=2.0)
+    env = Environment(Root.external(".env"))
+    container = ContainerInjector(DI_CONFIG)
+    container.set(Environment, env)
+    Application(env, container).run()

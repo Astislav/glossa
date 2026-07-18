@@ -1,3 +1,10 @@
-.venv
-.idea
-settings
+.venv/
+.idea/
+settings/
+__pycache__/
+*.pyc
+.env
+dist/
+build/
+.pytest_cache/
+.ruff_cache/

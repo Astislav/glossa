@@ -1,20 +1,22 @@
 import json
 
+from injector import inject, singleton
+
 from engine.dto.key_combination import KeyCombination
 from engine.dto.keyboard_layout_id import KeyboardLayoutId
 from engine.interfaces.keyboard_layout_registry_interface import KeyboardLayoutRegistryInterface
 from engine.windows.keyboard_layout_id import WindowsKeyboardLayoutId
 
 
+@singleton
 class KeyboardLayoutManagerSetup:
-    _in_loop_keyboard_layout_ids: list[KeyboardLayoutId] = []
-    _next_layout_in_loop_hotkey: KeyCombination = KeyCombination.from_hotkey_string('Alt+Shift')
-    _klid_to_hotkey_bindings: dict[KeyboardLayoutId, KeyCombination] = {}
-    _keyboard_layout_registry: KeyboardLayoutRegistryInterface
-
+    @inject
     def __init__(self, keyboard_layout_registry: KeyboardLayoutRegistryInterface):
         self._keyboard_layout_registry = keyboard_layout_registry
-        self._in_loop_keyboard_layout_ids = [klid.layout_id for klid in self._keyboard_layout_registry.layouts()]
+        self._in_loop_keyboard_layout_ids: list[KeyboardLayoutId] = \
+            [klid.layout_id for klid in self._keyboard_layout_registry.layouts()]
+        self._next_layout_in_loop_hotkey: KeyCombination = KeyCombination.from_hotkey_string('Alt+Shift')
+        self._klid_to_hotkey_bindings: dict[KeyboardLayoutId, KeyCombination] = {}
 
     def from_string(self, json: dict):
         self.next_layout_in_loop_hotkey = KeyCombination.from_hotkey_string(
@@ -39,7 +41,10 @@ class KeyboardLayoutManagerSetup:
             {
                 "in_loop_kl_ids": [klid.to_string for klid in self.in_loop_keyboard_layout_ids],
                 "next_kl_hotkey": self.next_layout_in_loop_hotkey.to_hotkey_string(),
-                "kl_id_to_hotkey": self.klid_to_hotkey_bindings
+                "kl_id_to_hotkey": {
+                    klid.to_string: hotkey.to_hotkey_string()
+                    for klid, hotkey in self.klid_to_hotkey_bindings.items()
+                }
             },
             indent=2
         )

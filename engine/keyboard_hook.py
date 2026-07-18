@@ -1,28 +1,31 @@
 import keyboard
+from injector import singleton
 
 from engine.dto.key_combination import KeyCombination
-from engine.interfaces.keyboard_hook_intreface import KeyboardHookInterface
+from engine.interfaces.keyboard_hook_interface import KeyboardHookInterface
 
 
+@singleton
 class KeyboardHook(KeyboardHookInterface):
     def __init__(self):
         self._pressed = set()
         self._active = set()
         self._hotkeys = set()
         self._hotkeys_to_callback = {}
-        self._keyboard = keyboard
-
-        self._keyboard.hook(self._handler)
-
-    def __del__(self):
-        keyboard.unhook(self._handler)
+        self._hook_handle = None
 
     def register_hook(self, key_combination: KeyCombination, callback: callable, *args):
         self._hotkeys.update(key_combination.as_frozenset())
         self._hotkeys_to_callback[key_combination.as_frozenset()] = {'callback': callback, 'args': args}
 
-    def process_events(self):
-        pass
+    def start(self):
+        if self._hook_handle is None:
+            self._hook_handle = keyboard.hook(self._handler)
+
+    def stop(self):
+        if self._hook_handle is not None:
+            keyboard.unhook(self._hook_handle)
+            self._hook_handle = None
 
     @staticmethod
     def _normalize(name: str) -> str:

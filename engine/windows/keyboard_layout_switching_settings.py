@@ -2,9 +2,12 @@ import ctypes
 import winreg
 from ctypes import wintypes
 
+from injector import singleton
+
 from engine.interfaces.keyboard_layout_switching_system_settings_interface import KeyboardLayoutSwitchingSystemSettingsInterface
 
 
+@singleton
 class WindowsKeyboardLayoutSwitchingSettings(KeyboardLayoutSwitchingSystemSettingsInterface):
     _layout_toggle_branch = r"Keyboard Layout\\Toggle"
     _layout_hotkey_reg_name = "Layout Hotkey"

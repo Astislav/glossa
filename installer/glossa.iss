@@ -30,7 +30,9 @@ WizardStyle=modern
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; Flags: unchecked
 
 [Files]
-Source: "..\dist\Glossa.exe"; DestDir: "{app}"; Flags: ignoreversion
+; The onedir build (folder of plain DLLs) — far fewer antivirus false
+; positives than the self-extracting onefile exe.
+Source: "..\dist\Glossa\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
 Name: "{autoprograms}\Glossa"; Filename: "{app}\Glossa.exe"

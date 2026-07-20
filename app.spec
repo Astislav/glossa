@@ -63,6 +63,31 @@ a = Analysis(  # noqa: F821
 )
 pyz = PYZ(a.pure)  # noqa: F821
 
+# Two artifacts from one analysis:
+#
+# 1. ONEDIR (dist/Glossa/) — goes inside the installer. A folder of plain
+#    DLLs scores far lower with antivirus heuristics than a self-extracting
+#    onefile binary, and it starts faster (no unpack step).
+exe_dir = EXE(  # noqa: F821
+    pyz,
+    a.scripts,
+    [],
+    exclude_binaries=True,
+    name="Glossa",
+    console=False,  # tray app — no console window; stdout logging goes nowhere by design
+    icon=str(ROOT / "resources" / "icon.ico"),
+    version=VERSION_INFO,
+    upx=False,
+)
+coll = COLLECT(  # noqa: F821
+    exe_dir,
+    a.binaries,
+    a.datas,
+    name="Glossa",
+    upx=False,
+)
+
+# 2. ONEFILE (dist/Glossa.exe) — the portable single-file download.
 exe = EXE(  # noqa: F821
     pyz,
     a.scripts,
@@ -70,7 +95,7 @@ exe = EXE(  # noqa: F821
     a.datas,
     [],
     name="Glossa",
-    console=False,  # tray app — no console window; stdout logging goes nowhere by design
+    console=False,
     icon=str(ROOT / "resources" / "icon.ico"),
     version=VERSION_INFO,
     upx=False,

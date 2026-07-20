@@ -32,7 +32,8 @@ Glossa is a small Windows tray app that does exactly that. (Named after
   never delayed.
 - Autostart with Windows (a checkbox), single-instance guard, and the
   system's own layout hotkeys are disabled while the app runs — and restored
-  when it exits, even after a crash.
+  when it exits. The original values are also backed up on disk, so even a
+  hard kill or power loss can't lose them: the next run picks them up.
 
 ## Who it's for
 

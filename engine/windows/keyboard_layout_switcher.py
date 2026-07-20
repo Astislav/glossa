@@ -27,10 +27,22 @@ class WindowsKeyboardLayoutSwitcher(KeyboardLayoutSwitcherInterface):
         wintypes.LPARAM
     )
     _user32.PostMessageW.restype = wintypes.BOOL
+    _user32.GetForegroundWindow.restype = wintypes.HWND
+    _user32.GetWindowThreadProcessId.argtypes = (wintypes.HWND, ctypes.c_void_p)
+    _user32.GetWindowThreadProcessId.restype = wintypes.DWORD
+    _user32.GetKeyboardLayout.argtypes = (wintypes.DWORD,)
+    _user32.GetKeyboardLayout.restype = wintypes.HKL
 
     @inject
     def __init__(self, log: SwitcherLogger):
         self._log = log
+
+    def active_layout_langid(self) -> int | None:
+        foreground = self._user32.GetForegroundWindow()
+        thread_id = self._user32.GetWindowThreadProcessId(foreground, None) if foreground else 0
+        hkl = self._user32.GetKeyboardLayout(thread_id)
+
+        return (hkl & 0xFFFF) if hkl else None
 
     def activate(self, keyboard_layout_id: KeyboardLayoutId):
         # No registry existence check here: this is the hot path of every

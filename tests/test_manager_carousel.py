@@ -24,7 +24,7 @@ def setup(registry):
 
 @pytest.fixture
 def switcher():
-    return FakeSwitcher()
+    return FakeSwitcher(initial_langid=0x0409)  # EN active at start
 
 
 @pytest.fixture
@@ -109,6 +109,22 @@ def test_stop_stops_hook(manager, hook):
     assert not hook.running
 
 
+def test_carousel_syncs_with_externally_switched_layout(manager, hook, switcher):
+    # The user switched to RU via the taskbar — the carousel must advance
+    # from the REAL active layout, not from its own stale bookkeeping.
+    switcher.current_langid = 0x0419
+    fire(manager, hook, "alt+shift")
+    assert switcher.activated == [EN]
+
+
+def test_no_dead_first_press_when_current_layout_is_not_the_first(manager, hook, switcher):
+    # Starting position: RU active (second carousel slot). The first press
+    # must visibly switch (to EN), not "advance" onto the already-active RU.
+    switcher.current_langid = 0x0419
+    fire(manager, hook, "alt+shift")
+    assert switcher.activated == [EN]
+
+
 def test_empty_carousel_does_not_crash(registry, switcher, hook, test_logger):
     setup = KeyboardLayoutManagerSetup(registry)
     setup.in_loop_keyboard_layout_ids = []
@@ -127,4 +143,6 @@ def test_switcher_failure_does_not_kill_worker(manager, hook, switcher):
 
     switcher.activate = original_activate
     fire(manager, hook, "alt+shift")
-    assert switcher.activated == [EN]
+    # The failed switch didn't change the active layout (still EN), so the
+    # retry targets the same next layout — RU.
+    assert switcher.activated == [RU]

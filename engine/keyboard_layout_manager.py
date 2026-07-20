@@ -23,10 +23,14 @@ class KeyboardLayoutManager(ServiceInterface):
     the target layout and enqueue it; the actual switch (LoadKeyboardLayout,
     broadcasts, possible retries) happens on a dedicated worker thread.
 
-    The carousel remembers its position: a direct hotkey that leaves the
-    carousel (e.g. Greek) does not advance it, and the next carousel press
-    returns to the last carousel layout instead of moving on.
+    The carousel syncs with reality: before advancing it asks the OS which
+    layout is actually active (the user may have switched via the taskbar
+    or a direct hotkey), advances from THAT position, and if the active
+    layout is outside the carousel (e.g. Greek), returns to the last
+    remembered carousel layout instead of moving on.
     """
+
+    _NEXT_IN_LOOP = object()  # queue sentinel: resolve the target lazily, on the worker
 
     @inject
     def __init__(
@@ -42,7 +46,6 @@ class KeyboardLayoutManager(ServiceInterface):
         self._log = log
         self._carousel: list[KeyboardLayoutId] = []
         self._carousel_index = 0
-        self._away_from_carousel = False
         self._switch_queue: queue.Queue = queue.Queue()
         self._worker: threading.Thread | None = None
 
@@ -88,49 +91,65 @@ class KeyboardLayoutManager(ServiceInterface):
     def _register_hotkeys(self):
         self._carousel = list(self._kl_manager_setup.in_loop_keyboard_layout_ids)
         self._carousel_index = 0
-        self._away_from_carousel = False
 
         self._keyboard_hook.register_hook(self._kl_manager_setup.next_layout_in_loop_hotkey, self._switch_next_in_loop)
         for klid, hotkey in self._kl_manager_setup.klid_to_hotkey_bindings.items():
             self._keyboard_hook.register_hook(hotkey, self._switch_direct, klid)
 
-    # --- hook callbacks: cheap resolution + enqueue only ---
+    # --- hook callbacks: enqueue only, no work on the hook thread ---
 
     def _switch_next_in_loop(self):
         if not self._carousel:
             self._log.warning("carousel hotkey pressed, but the carousel is empty")
             return
 
-        if self._away_from_carousel:
-            # Coming back from a direct-switched layout: return to the last
-            # active carousel layout instead of advancing past it.
-            self._away_from_carousel = False
-        else:
-            self._carousel_index = (self._carousel_index + 1) % len(self._carousel)
-
-        self._switch_queue.put(self._carousel[self._carousel_index])
+        self._switch_queue.put(self._NEXT_IN_LOOP)
 
     def _switch_direct(self, klid: KeyboardLayoutId):
-        if klid in self._carousel:
-            self._carousel_index = self._carousel.index(klid)
-            self._away_from_carousel = False
-        else:
-            self._away_from_carousel = True
-
         self._switch_queue.put(klid)
 
     # --- worker thread ---
 
     def _process_switches(self):
         while True:
-            klid = self._switch_queue.get()
+            item = self._switch_queue.get()
             try:
-                if klid is None:
+                if item is None:
                     return
-                self._log.info("switching to layout %s", klid)
                 try:
+                    klid = self._resolve_next_in_loop() if item is self._NEXT_IN_LOOP else item
+                    self._remember_carousel_position(klid)
+                    self._log.info("switching to layout %s", klid)
                     self._kl_switcher.activate(klid)
                 except Exception:
-                    self._log.exception("failed to activate layout %s", klid)
+                    self._log.exception("failed to switch layout")
             finally:
                 self._switch_queue.task_done()
+
+    def _resolve_next_in_loop(self) -> KeyboardLayoutId:
+        # Trust the OS, not our own bookkeeping: the user may have switched
+        # layouts via the taskbar or a direct hotkey since the last press.
+        active_index = self._carousel_index_of(self._kl_switcher.active_layout_langid())
+        if active_index is not None:
+            self._carousel_index = (active_index + 1) % len(self._carousel)
+        # else: the active layout is outside the carousel — return to the
+        # last remembered carousel layout without advancing.
+
+        return self._carousel[self._carousel_index]
+
+    def _remember_carousel_position(self, klid: KeyboardLayoutId):
+        if klid in self._carousel:
+            self._carousel_index = self._carousel.index(klid)
+
+    def _carousel_index_of(self, langid: int | None) -> int | None:
+        if langid is None:
+            return None
+
+        # A layout handle's language id matches the last 4 hex digits of the
+        # KLID — also true for variant layouts (Dvorak 00010409 -> 0409).
+        suffix = f"{langid:04X}"
+        for index, klid in enumerate(self._carousel):
+            if klid.to_string.upper().endswith(suffix):
+                return index
+
+        return None

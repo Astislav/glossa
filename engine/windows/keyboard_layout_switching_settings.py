@@ -1,5 +1,6 @@
 import ctypes
 import json
+import os
 import winreg
 from ctypes import wintypes
 from pathlib import Path
@@ -106,10 +107,14 @@ class WindowsKeyboardLayoutSwitchingSettings(KeyboardLayoutSwitchingSystemSettin
 
     def _save_backup(self, originals: tuple):
         self._backup_path.parent.mkdir(parents=True, exist_ok=True)
-        self._backup_path.write_text(
+        # Atomic write (temp file + rename): a power cut mid-write must not
+        # leave a truncated backup — it is our only copy of the originals.
+        temp_path = self._backup_path.with_suffix(".tmp")
+        temp_path.write_text(
             json.dumps({"language_hotkey": originals[0], "layout_hotkey": originals[1]}),
             encoding="utf-8",
         )
+        os.replace(temp_path, self._backup_path)
 
     def _notify(self):
         # WM_SETTINGCHANGE carries a string POINTER — it cannot be posted:

@@ -30,11 +30,16 @@ class FakeRegistry(KeyboardLayoutRegistryInterface):
 
 
 class FakeSwitcher(KeyboardLayoutSwitcherInterface):
-    def __init__(self):
+    def __init__(self, initial_langid: int | None = None):
         self.activated: list[str] = []
+        self.current_langid = initial_langid
 
     def activate(self, keyboard_layout_id: KeyboardLayoutId):
         self.activated.append(keyboard_layout_id.to_string)
+        self.current_langid = int(keyboard_layout_id.to_string[-4:], 16)
+
+    def active_layout_langid(self) -> int | None:
+        return self.current_langid
 
 
 class FakeHook(KeyboardHookInterface):

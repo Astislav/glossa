@@ -16,6 +16,15 @@ jobs:
       - run: uv sync
       - run: uv run pytest
       - run: uv run nexus-kit build
+      - name: Smoke-test the frozen exe
+        run: |
+          Start-Process -FilePath dist\Glossa.exe -WorkingDirectory dist
+          Start-Sleep -Seconds 8
+          $proc = Get-Process Glossa -ErrorAction SilentlyContinue
+          if (-not $proc) { throw "Glossa.exe did not stay alive" }
+          if (-not (Test-Path dist\settings\settings.json)) { throw "settings.json was not created" }
+          if (-not (Test-Path dist\settings\system_hotkeys_backup.json)) { throw "hotkey backup was not created" }
+          Stop-Process -Name Glossa -Force
       - name: Publish release
         uses: softprops/action-gh-release@v2
         with:

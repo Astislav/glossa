@@ -17,12 +17,18 @@ jobs:
       - run: uv run pytest
       - run: uv run nexus-kit build
       - name: Smoke-test the frozen exe
+        env:
+          QT_QPA_PLATFORM: offscreen  # runner session has no interactive desktop
         run: |
           Start-Process -FilePath dist\Glossa.exe -WorkingDirectory dist
-          Start-Sleep -Seconds 8
+          # Cold runner + realtime AV scan make the onefile unpack slow — poll, don't sleep.
+          $deadline = (Get-Date).AddSeconds(120)
+          while ((Get-Date) -lt $deadline -and -not (Test-Path dist\settings\settings.json)) {
+            Start-Sleep -Seconds 3
+          }
           $proc = Get-Process Glossa -ErrorAction SilentlyContinue
           if (-not $proc) { throw "Glossa.exe did not stay alive" }
-          if (-not (Test-Path dist\settings\settings.json)) { throw "settings.json was not created" }
+          if (-not (Test-Path dist\settings\settings.json)) { throw "settings.json was not created within 120s" }
           if (-not (Test-Path dist\settings\system_hotkeys_backup.json)) { throw "hotkey backup was not created" }
           Stop-Process -Name Glossa -Force
       - name: Publish release

@@ -58,6 +58,38 @@ def test_unknown_layout_in_bindings_is_rejected(setup):
         }
 
 
-def test_invalid_klid_string_is_rejected(setup):
-    with pytest.raises(ValueError):
-        setup.from_string({"in_loop_kl_ids": ["not-a-klid"]})
+STALE = "00000404"  # a valid KLID format, but not installed in the test registry
+
+
+def test_stale_klid_in_carousel_is_dropped(setup):
+    dropped = setup.from_string({"in_loop_kl_ids": [EN, STALE, RU]})
+
+    assert dropped == [STALE]
+    assert [klid.to_string for klid in setup.in_loop_keyboard_layout_ids] == [EN, RU]
+
+
+def test_stale_klid_in_bindings_is_dropped(setup):
+    dropped = setup.from_string({
+        "in_loop_kl_ids": [EN, RU],
+        "kl_id_to_hotkey": {EN: "alt+shift+e", STALE: "alt+shift+g"},
+    })
+
+    assert dropped == [STALE]
+    assert [klid.to_string for klid in setup.klid_to_hotkey_bindings] == [EN]
+
+
+def test_malformed_klid_is_dropped_not_fatal(setup):
+    # A corrupt or hand-edited entry must not brick startup.
+    dropped = setup.from_string({"in_loop_kl_ids": [EN, "not-a-klid"]})
+
+    assert dropped == ["not-a-klid"]
+    assert [klid.to_string for klid in setup.in_loop_keyboard_layout_ids] == [EN]
+
+
+def test_carousel_falls_back_to_default_when_all_layouts_are_stale(setup):
+    # Every saved layout is gone — keep the default (all installed) instead
+    # of an empty, useless carousel.
+    dropped = setup.from_string({"in_loop_kl_ids": [STALE]})
+
+    assert dropped == [STALE]
+    assert [klid.to_string for klid in setup.in_loop_keyboard_layout_ids] == [EN, RU]

@@ -30,17 +30,37 @@ class SettingsStore(ServiceInterface):
 
     def start(self):
         if self._settings_path.exists():
-            self._kl_manager_setup.from_string(json.loads(self._settings_path.read_text(encoding="utf-8")))
-            self._log.info("settings loaded from %s", self._settings_path)
+            self._load_or_reset()
         else:
-            # First run: inherit the user's existing system hotkey (Alt+Shift,
-            # Ctrl+Shift, …) so their habit keeps working out of the box.
-            system_hotkey = self._system_settings.system_switch_hotkey()
-            if system_hotkey is not None:
-                self._kl_manager_setup.next_layout_in_loop_hotkey = system_hotkey
-                self._log.info("carousel hotkey inherited from system: %s", system_hotkey.to_hotkey_string())
+            self._write_first_run_defaults()
+
+    def _load_or_reset(self):
+        try:
+            data = json.loads(self._settings_path.read_text(encoding="utf-8"))
+            dropped = self._kl_manager_setup.from_string(data)
+        except Exception:
+            # Corrupt or unreadable settings must not brick startup — fall
+            # back to defaults and overwrite the bad file.
+            self._log.exception("could not load settings from %s — resetting to defaults", self._settings_path)
             self.save()
-            self._log.info("default settings written to %s", self._settings_path)
+            return
+
+        self._log.info("settings loaded from %s", self._settings_path)
+        if dropped:
+            # Layouts the user removed from Windows — self-heal the file so
+            # the warning doesn't repeat on every launch.
+            self._log.warning("dropped layouts no longer installed: %s", ", ".join(dict.fromkeys(dropped)))
+            self.save()
+
+    def _write_first_run_defaults(self):
+        # First run: inherit the user's existing system hotkey (Alt+Shift,
+        # Ctrl+Shift, …) so their habit keeps working out of the box.
+        system_hotkey = self._system_settings.system_switch_hotkey()
+        if system_hotkey is not None:
+            self._kl_manager_setup.next_layout_in_loop_hotkey = system_hotkey
+            self._log.info("carousel hotkey inherited from system: %s", system_hotkey.to_hotkey_string())
+        self.save()
+        self._log.info("default settings written to %s", self._settings_path)
 
     def stop(self):
         pass

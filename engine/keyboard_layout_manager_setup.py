@@ -18,23 +18,41 @@ class KeyboardLayoutManagerSetup:
         self._next_layout_in_loop_hotkey: KeyCombination = KeyCombination.from_hotkey_string('Alt+Shift')
         self._klid_to_hotkey_bindings: dict[KeyboardLayoutId, KeyCombination] = {}
 
-    def from_string(self, json: dict):
+    def from_string(self, json: dict) -> list[str]:
+        """Load persisted settings, tolerantly. Layouts the user has since
+        removed from Windows (or a malformed/hand-edited entry) are skipped
+        rather than raising — a stale settings file must never brick startup.
+        Returns the klid strings that were dropped, so the caller can warn
+        and rewrite the cleaned file.
+        """
+        dropped: list[str] = []
+
         self.next_layout_in_loop_hotkey = KeyCombination.from_hotkey_string(
             json.get("next_kl_hotkey", 'Alt+Shift')
         )
 
         klids: list[KeyboardLayoutId] = []
         for klid_string in json.get("in_loop_kl_ids", []):
-            klid = self._klid_from_string(klid_string)
-            klids.append(klid)
-        self.in_loop_keyboard_layout_ids = klids
+            klid = self._installed_klid_or_none(klid_string)
+            if klid is None:
+                dropped.append(klid_string)
+            else:
+                klids.append(klid)
+        # An empty carousel is useless — keep the default (all installed) if
+        # every saved layout is gone.
+        if klids:
+            self.in_loop_keyboard_layout_ids = klids
 
         bindings: dict[KeyboardLayoutId, KeyCombination] = {}
         for klid_string, hotkey_string in json.get("kl_id_to_hotkey", {}).items():
-            klid = self._klid_from_string(klid_string)
-            hotkey = KeyCombination.from_hotkey_string(hotkey_string)
-            bindings[klid] = hotkey
+            klid = self._installed_klid_or_none(klid_string)
+            if klid is None:
+                dropped.append(klid_string)
+            else:
+                bindings[klid] = KeyCombination.from_hotkey_string(hotkey_string)
         self.klid_to_hotkey_bindings = bindings
+
+        return dropped
 
     def to_string(self) -> str:
         return json.dumps(
@@ -83,11 +101,12 @@ class KeyboardLayoutManagerSetup:
     def next_layout_in_loop_hotkey(self, next_layout_in_loop_hotkey: KeyCombination):
         self._next_layout_in_loop_hotkey = next_layout_in_loop_hotkey
 
-    # noinspection PyMethodMayBeStatic
-    def _klid_from_string(self, klid_string: str) -> KeyboardLayoutId:
+    def _installed_klid_or_none(self, klid_string: str) -> KeyboardLayoutId | None:
+        """Parse a saved klid string, returning None if it is malformed or
+        no longer installed in the system."""
         try:
             klid = WindowsKeyboardLayoutId(klid_string)
-
-            return klid
         except ValueError:
-            raise ValueError(f"Invalid klid: {klid_string}")
+            return None
+
+        return klid if self._keyboard_layout_registry.layout_exists(klid) else None

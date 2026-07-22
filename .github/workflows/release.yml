@@ -36,4 +36,8 @@ jobs:
         with:
           generate_release_notes: true
           fail_on_unmatched_files: true
+          # legacy = let GitHub pick "latest" by highest semver, not by which
+          # workflow published last. Pushing several tags at once raced and a
+          # lower version grabbed the "latest" flag on finish.
+          make_latest: legacy
           files: dist/Glossa.exe

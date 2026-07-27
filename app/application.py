@@ -9,6 +9,7 @@ from nexus_kit.impl import ServiceRunner
 from nexus_kit.interfaces import ApplicationInterface, ContainerInterface
 
 from app.config.environment import Environment
+from app.readiness_controller import ReadinessController
 from app.services.autostart import Autostart
 from app.services.settings_store import SettingsStore
 from app.services.system_hotkeys_guard import SystemHotkeysGuard
@@ -19,7 +20,10 @@ from engine.keyboard_layout_manager_setup import KeyboardLayoutManagerSetup
 
 
 class Application(ApplicationInterface):
-    SERVICES = [SettingsStore, SystemHotkeysGuard, KeyboardLayoutManager]  # startup order; stopped in reverse
+    # Startup order (stopped in reverse). start() only puts these in a safe
+    # passive state; the actual takeover happens in _activate(), once the OS
+    # keyboard subsystem is ready.
+    SERVICES = [SystemHotkeysGuard, KeyboardLayoutManager]
 
     def __init__(self, environment: Environment, container: ContainerInterface):
         self._env = environment
@@ -48,7 +52,7 @@ class Application(ApplicationInterface):
         app.setWindowIcon(icon)
 
         tray_icon = QSystemTrayIcon(icon, parent=app)
-        tray_icon.setToolTip(self._env.APP_NAME)
+        tray_icon.setToolTip(f"{self._env.APP_NAME} (starting…)")
         tray_menu = QMenu()
 
         action_settings = QAction("Settings", triggered=show_settings)
@@ -79,8 +83,31 @@ class Application(ApplicationInterface):
 
         tray_icon.show()
 
+        registry = self._container.get(KeyboardLayoutRegistryInterface)
+        readiness = ReadinessController(
+            registry,
+            lambda waited: self._activate(tray_icon, waited),
+        )
+
         with ServiceRunner(self._container, self.SERVICES):
+            # Services are now in their safe passive state (system hotkeys
+            # recovered, nothing taken over). Wait for the OS to be ready,
+            # then take over.
+            readiness.start()
             app.exec()
+
+    def _activate(self, tray_icon, waited: bool):
+        # The OS keyboard subsystem is ready: load settings, take over the
+        # hotkeys, arm the switcher.
+        self._container.get(SettingsStore).load()
+        self._container.get(SystemHotkeysGuard).activate()
+        self._container.get(KeyboardLayoutManager).activate()
+
+        tray_icon.setToolTip(self._env.APP_NAME)
+        if waited:
+            # Only surface a toast when we actually had to wait (a cold boot) —
+            # no notification spam on a normal launch.
+            tray_icon.showMessage(self._env.APP_NAME, "Glossa is ready")
 
     def _on_session_end(self, _session_manager):
         # Idempotent: SystemHotkeysGuard.stop() no-ops if already restored,

@@ -11,3 +11,8 @@ class SettingsStoreLogger(NamedLogger):
 @singleton
 class SystemHotkeysGuardLogger(NamedLogger):
     name = "ls.hotkeys-guard"
+
+
+@singleton
+class SubsystemReadyLogger(NamedLogger):
+    name = "ls.subsystem-ready"

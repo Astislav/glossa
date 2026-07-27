@@ -13,8 +13,11 @@ class KeyboardLayoutManagerSetup:
     @inject
     def __init__(self, keyboard_layout_registry: KeyboardLayoutRegistryInterface):
         self._keyboard_layout_registry = keyboard_layout_registry
-        self._in_loop_keyboard_layout_ids: list[KeyboardLayoutId] = \
-            [klid.layout_id for klid in self._keyboard_layout_registry.layouts()]
+        # Lazy: the default (all installed layouts) is read on first access,
+        # not at construction. This object can be built very early on a cold
+        # boot, before the registry is populated — freezing an empty default
+        # then would leave the carousel permanently empty.
+        self._in_loop_keyboard_layout_ids: list[KeyboardLayoutId] | None = None
         self._next_layout_in_loop_hotkey: KeyCombination = KeyCombination.from_hotkey_string('Alt+Shift')
         self._klid_to_hotkey_bindings: dict[KeyboardLayoutId, KeyCombination] = {}
 
@@ -83,6 +86,9 @@ class KeyboardLayoutManagerSetup:
 
     @property
     def in_loop_keyboard_layout_ids(self) -> list[KeyboardLayoutId]:
+        if self._in_loop_keyboard_layout_ids is None:
+            self._in_loop_keyboard_layout_ids = \
+                [klid.layout_id for klid in self._keyboard_layout_registry.layouts()]
         return self._in_loop_keyboard_layout_ids
 
     @in_loop_keyboard_layout_ids.setter

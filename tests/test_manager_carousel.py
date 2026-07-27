@@ -35,7 +35,8 @@ def hook():
 @pytest.fixture
 def manager(setup, switcher, hook, test_logger):
     manager = KeyboardLayoutManager(setup, switcher, hook, test_logger)
-    manager.start()
+    manager.start()     # passive
+    manager.activate()  # take over — register hotkeys, arm the hook
     yield manager
     manager.stop()
 
@@ -130,6 +131,7 @@ def test_empty_carousel_does_not_crash(registry, switcher, hook, test_logger):
     setup.in_loop_keyboard_layout_ids = []
     manager = KeyboardLayoutManager(setup, switcher, hook, test_logger)
     manager.start()
+    manager.activate()
 
     fire(manager, hook, "alt+shift")
     assert switcher.activated == []

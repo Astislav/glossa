@@ -64,6 +64,18 @@ class WindowsKeyboardLayoutSwitchingSettings(KeyboardLayoutSwitchingSystemSettin
         self._notify()
         self._backup_path.unlink(missing_ok=True)
 
+    def recover_if_needed(self):
+        """Restore the system hotkeys immediately at startup if a previous run
+        left them disabled (a leftover backup means an unclean exit). No
+        backup = the OS is in its normal state, nothing to do. This lets the
+        system keep switching natively while we wait to take over."""
+        backup = self._load_backup()
+        if backup is None:
+            return
+
+        self._language_hot_key_id, self._layout_hot_key_id = backup
+        self.restore_system_hotkeys()
+
     @staticmethod
     def _write_or_delete(key, name, value):
         # A None original means the value was ABSENT before we touched it —

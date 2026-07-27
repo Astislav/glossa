@@ -50,13 +50,19 @@ class KeyboardLayoutManager(ServiceInterface):
         self._worker: threading.Thread | None = None
 
     def start(self):
-        # The setup is populated by SettingsStore at startup — register
-        # hotkeys here, not in the constructor.
+        # Passive: nothing is registered until activate(). ServiceRunner still
+        # calls start()/stop() so teardown is guaranteed; the takeover itself
+        # waits until the OS keyboard subsystem is ready.
+        pass
+
+    def activate(self):
+        # The setup is populated (settings loaded) by the time we're activated —
+        # register hotkeys from it now.
         self._register_hotkeys()
         self._worker = threading.Thread(target=self._process_switches, daemon=True, name="layout-switch-worker")
         self._worker.start()
         self._keyboard_hook.start()
-        self._log.info("keyboard layout manager started")
+        self._log.info("keyboard layout manager active")
 
     def stop(self):
         self._keyboard_hook.stop()

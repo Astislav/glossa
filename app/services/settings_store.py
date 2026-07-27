@@ -8,6 +8,7 @@ from nexus_kit.interfaces import ServiceInterface
 
 from app.config.environment import Environment
 from app.loggers import SettingsStoreLogger
+from engine.interfaces.keyboard_layout_registry_interface import KeyboardLayoutRegistryInterface
 from engine.interfaces.keyboard_layout_switching_system_settings_interface import \
     KeyboardLayoutSwitchingSystemSettingsInterface
 from engine.keyboard_layout_manager_setup import KeyboardLayoutManagerSetup
@@ -20,21 +21,36 @@ class SettingsStore(ServiceInterface):
             self,
             environment: Environment,
             keyboard_layout_manager_setup: KeyboardLayoutManagerSetup,
+            registry: KeyboardLayoutRegistryInterface,
             system_settings: KeyboardLayoutSwitchingSystemSettingsInterface,
             log: SettingsStoreLogger,
     ):
         self._settings_path = Path(Root.external(environment.SETTINGS_FILE))
         self._kl_manager_setup = keyboard_layout_manager_setup
+        self._registry = registry
         self._system_settings = system_settings
         self._log = log
 
     def start(self):
+        pass
+
+    def load(self):
+        """Load settings into the setup. Called once the keyboard subsystem is
+        ready, so the registry is reliable here."""
         if self._settings_path.exists():
             self._load_or_reset()
         else:
             self._write_first_run_defaults()
 
     def _load_or_reset(self):
+        if not self._registry.layouts():
+            # The keyboard subsystem isn't ready (cold boot). Validating the
+            # saved layouts against an empty registry would drop them all and
+            # self-heal them away — destroying the file. Leave it untouched;
+            # a restart (or the readiness gate) loads it correctly.
+            self._log.warning("keyboard layouts unavailable — skipping settings load to avoid data loss")
+            return
+
         try:
             data = json.loads(self._settings_path.read_text(encoding="utf-8"))
             dropped = self._kl_manager_setup.from_string(data)

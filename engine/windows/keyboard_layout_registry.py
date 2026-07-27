@@ -13,7 +13,14 @@ class WindowsKeyboardLayoutsRegistry(KeyboardLayoutRegistryInterface):
         klid_preload_branch = r"Keyboard Layout\\Preload"
         result = []
 
-        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, klid_preload_branch) as key:
+        try:
+            key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, klid_preload_branch)
+        except FileNotFoundError:
+            # Very early after a cold boot the per-user Preload key may not
+            # exist yet — report "no layouts" rather than crashing.
+            return result
+
+        with key:
             i = 0
             while True:
                 try:

@@ -6,6 +6,7 @@ from engine.keyboard_layout_manager_setup import KeyboardLayoutManagerSetup
 from tests.conftest import FakeHook, FakeRegistry, FakeSwitcher
 
 EN, RU, GR = "00000409", "00000419", "00000408"
+JP, TI = "00000411", "00000F00"
 
 
 @pytest.fixture
@@ -148,3 +149,99 @@ def test_switcher_failure_does_not_kill_worker(manager, hook, switcher):
     # The failed switch didn't change the active layout (still EN), so the
     # retry targets the same next layout — RU.
     assert switcher.activated == [RU]
+
+
+def test_shared_direct_hotkey_forms_second_carousel(switcher, hook, test_logger):
+    # Primary: EN ↔ RU on Alt+Shift. Secondary: JP ↔ TI on Ctrl+Shift —
+    # several layouts sharing one direct hotkey cycle as another carousel.
+    registry = FakeRegistry([EN, RU, JP, TI])
+    setup = KeyboardLayoutManagerSetup(registry)
+    layouts = {layout.layout_id.to_string: layout.layout_id for layout in registry.layouts()}
+    setup.in_loop_keyboard_layout_ids = [layouts[EN], layouts[RU]]
+    setup.klid_to_hotkey_bindings = {
+        layouts[JP]: KeyCombination.from_hotkey_string("ctrl+shift"),
+        layouts[TI]: KeyCombination.from_hotkey_string("ctrl+shift"),
+    }
+    manager = KeyboardLayoutManager(setup, switcher, hook, test_logger)
+    manager.start()
+
+    # Shared hotkey is registered once (hook overwrites by combo frozenset).
+    assert frozenset({"ctrl", "shift"}) in hook.registrations
+    assert frozenset({"alt", "shift"}) in hook.registrations
+
+    fire(manager, hook, "ctrl+shift")
+    fire(manager, hook, "ctrl+shift")
+    fire(manager, hook, "ctrl+shift")
+    assert switcher.activated == [JP, TI, JP]
+
+    manager.stop()
+
+
+def test_second_carousel_returns_to_last_after_leaving(switcher, hook, test_logger):
+    registry = FakeRegistry([EN, RU, JP, TI])
+    setup = KeyboardLayoutManagerSetup(registry)
+    layouts = {layout.layout_id.to_string: layout.layout_id for layout in registry.layouts()}
+    setup.in_loop_keyboard_layout_ids = [layouts[EN], layouts[RU]]
+    setup.klid_to_hotkey_bindings = {
+        layouts[JP]: KeyCombination.from_hotkey_string("ctrl+shift"),
+        layouts[TI]: KeyCombination.from_hotkey_string("ctrl+shift"),
+    }
+    manager = KeyboardLayoutManager(setup, switcher, hook, test_logger)
+    manager.start()
+
+    fire(manager, hook, "ctrl+shift")   # -> JP
+    fire(manager, hook, "ctrl+shift")   # -> TI
+    fire(manager, hook, "alt+shift")    # -> EN (primary never advanced; still slot 0)
+    fire(manager, hook, "ctrl+shift")   # back to TI, not JP
+    assert switcher.activated == [JP, TI, EN, TI]
+
+    manager.stop()
+
+
+def test_primary_and_secondary_carousels_are_independent(switcher, hook, test_logger):
+    registry = FakeRegistry([EN, RU, JP, TI])
+    setup = KeyboardLayoutManagerSetup(registry)
+    layouts = {layout.layout_id.to_string: layout.layout_id for layout in registry.layouts()}
+    setup.in_loop_keyboard_layout_ids = [layouts[EN], layouts[RU]]
+    setup.klid_to_hotkey_bindings = {
+        layouts[JP]: KeyCombination.from_hotkey_string("ctrl+shift"),
+        layouts[TI]: KeyCombination.from_hotkey_string("ctrl+shift"),
+    }
+    manager = KeyboardLayoutManager(setup, switcher, hook, test_logger)
+    manager.start()
+
+    fire(manager, hook, "alt+shift")    # primary -> RU
+    fire(manager, hook, "ctrl+shift")   # secondary -> JP
+    fire(manager, hook, "alt+shift")    # primary returns to RU (outside primary)
+    fire(manager, hook, "alt+shift")    # primary advances RU -> EN
+    fire(manager, hook, "ctrl+shift")   # secondary returns to JP
+    assert switcher.activated == [RU, JP, RU, EN, JP]
+
+    manager.stop()
+
+
+def test_single_direct_hotkey_still_jumps(manager, hook, switcher):
+    # Unchanged: one layout per hotkey remains a direct jump, not a cycle.
+    fire(manager, hook, "alt+shift+g")
+    fire(manager, hook, "alt+shift+g")
+    assert switcher.activated == [GR, GR]
+
+
+def test_shared_hotkey_carousel_respects_binding_order(switcher, hook, test_logger):
+    # Binding order is the cycle order — first listed layout is the entry point.
+    registry = FakeRegistry([EN, RU, JP, TI])
+    setup = KeyboardLayoutManagerSetup(registry)
+    layouts = {layout.layout_id.to_string: layout.layout_id for layout in registry.layouts()}
+    setup.in_loop_keyboard_layout_ids = [layouts[EN], layouts[RU]]
+    setup.klid_to_hotkey_bindings = {
+        layouts[TI]: KeyCombination.from_hotkey_string("ctrl+shift"),
+        layouts[JP]: KeyCombination.from_hotkey_string("ctrl+shift"),
+    }
+    manager = KeyboardLayoutManager(setup, switcher, hook, test_logger)
+    manager.start()
+
+    fire(manager, hook, "ctrl+shift")
+    fire(manager, hook, "ctrl+shift")
+    assert switcher.activated == [TI, JP]
+
+    manager.stop()

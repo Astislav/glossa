@@ -20,7 +20,11 @@ Glossa is a small Windows tray app that does exactly that. (Named after
   hotkey you already use from Windows settings and adopts it — `Alt+Shift`
   people and `Ctrl+Shift` people both keep their habit.
 - **Direct hotkeys** — give any layout its own combo, e.g. `Alt+Shift+G`
-  for Greek. Press it only when you actually want that language.
+  for Greek. Press it only when you actually want that language. Give the
+  *same* direct hotkey to several layouts to cycle them as another
+  carousel (e.g. Japanese + Tibetan on `Alt+Shift` while `Ctrl+Shift`
+  keeps English ↔ Russian). Use the ↑↓ buttons in Settings to set the
+  cycle order — top of the list comes first.
 - **Smart conflict handling** — `Alt+Shift` and `Alt+Shift+G` coexist
   correctly: the longer combo fires instantly on key press; the shorter one
   fires on release, only if the longer one didn't intervene. No double

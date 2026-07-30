@@ -92,6 +92,12 @@ class _LayoutRow:
         self.clear_button.setText("✕")
         self.clear_button.setToolTip("Clear the direct hotkey")
         self.clear_button.clicked.connect(lambda: self.hotkey_edit.set_hotkey(""))
+        self.up_button = QToolButton()
+        self.up_button.setText("↑")
+        self.up_button.setToolTip("Move up — higher means earlier in the carousel cycle")
+        self.down_button = QToolButton()
+        self.down_button.setText("↓")
+        self.down_button.setToolTip("Move down — lower means later in the carousel cycle")
 
 
 class SettingsWindow(QWidget):
@@ -143,14 +149,26 @@ class SettingsWindow(QWidget):
         main_layout.addWidget(carousel_group)
 
         layouts_group = QGroupBox("Layouts")
-        self._layouts_grid = QGridLayout(layouts_group)
+        layouts_outer = QVBoxLayout(layouts_group)
+        self._layouts_grid = QGridLayout()
         self._layouts_grid.setColumnStretch(0, 1)
         header_carousel = QLabel("In carousel")
         header_hotkey = QLabel("Direct hotkey")
+        header_order = QLabel("Order")
         header_carousel.setStyleSheet("color: gray;")
         header_hotkey.setStyleSheet("color: gray;")
+        header_order.setStyleSheet("color: gray;")
         self._layouts_grid.addWidget(header_carousel, 0, 0)
         self._layouts_grid.addWidget(header_hotkey, 0, 1)
+        self._layouts_grid.addWidget(header_order, 0, 3, 1, 2)
+        layouts_outer.addLayout(self._layouts_grid)
+        direct_hint = QLabel(
+            "Same direct hotkey on several layouts cycles them as another "
+            "carousel. Use ↑↓ to set cycle order — top comes first."
+        )
+        direct_hint.setStyleSheet("color: gray;")
+        direct_hint.setWordWrap(True)
+        layouts_outer.addWidget(direct_hint)
         main_layout.addWidget(layouts_group)
 
         self._autostart_checkbox = QCheckBox("Start with Windows")
@@ -180,33 +198,81 @@ class SettingsWindow(QWidget):
         # to the combination being tried out.
         self._connect_capture_pause(self._carousel_hotkey_edit)
 
-        self.setMinimumWidth(420)
+        self.setMinimumWidth(480)
 
     def _connect_capture_pause(self, edit: HotkeyEdit):
         edit.capture_started.connect(self._manager.pause_hotkeys)
         edit.capture_finished.connect(self._manager.resume_hotkeys)
 
-    def _rebuild_rows(self):
+    def _rebuild_rows(self, layouts):
         # The set of installed layouts can change while the app runs (the
         # user adds a language in Windows settings) — rebuild on every open.
         for row in self._rows:
-            for widget in (row.checkbox, row.hotkey_edit, row.clear_button):
+            for widget in (
+                row.checkbox, row.hotkey_edit, row.clear_button,
+                row.up_button, row.down_button,
+            ):
                 self._layouts_grid.removeWidget(widget)
                 widget.deleteLater()
         self._rows.clear()
 
-        for row_index, layout in enumerate(self._registry.layouts(), start=1):
+        for layout in layouts:
             row = _LayoutRow(layout)
             self._rows.append(row)
+            self._connect_capture_pause(row.hotkey_edit)
+            # lambdas bind the row object, not the changing loop index
+            row.up_button.clicked.connect(lambda checked=False, r=row: self._move_row(r, -1))
+            row.down_button.clicked.connect(lambda checked=False, r=row: self._move_row(r, +1))
+
+        self._relayout_rows()
+
+    def _relayout_rows(self):
+        for row_index, row in enumerate(self._rows, start=1):
             self._layouts_grid.addWidget(row.checkbox, row_index, 0)
             self._layouts_grid.addWidget(row.hotkey_edit, row_index, 1)
             self._layouts_grid.addWidget(row.clear_button, row_index, 2)
-            self._connect_capture_pause(row.hotkey_edit)
+            self._layouts_grid.addWidget(row.up_button, row_index, 3)
+            self._layouts_grid.addWidget(row.down_button, row_index, 4)
+            row.up_button.setEnabled(row_index > 1)
+            row.down_button.setEnabled(row_index < len(self._rows))
+
+    def _move_row(self, row: _LayoutRow, delta: int):
+        index = self._rows.index(row)
+        new_index = index + delta
+        if new_index < 0 or new_index >= len(self._rows):
+            return
+        self._rows[index], self._rows[new_index] = self._rows[new_index], self._rows[index]
+        self._relayout_rows()
+
+    def _ordered_layouts_for_display(self):
+        """Show saved carousel/binding order first so ↑↓ matches what cycles."""
+        by_klid = {layout.layout_id.to_string: layout for layout in self._registry.layouts()}
+        ordered = []
+        seen: set[str] = set()
+
+        for klid in self._setup.in_loop_keyboard_layout_ids:
+            key = klid.to_string
+            if key in by_klid and key not in seen:
+                ordered.append(by_klid[key])
+                seen.add(key)
+
+        for klid in self._setup.klid_to_hotkey_bindings:
+            key = klid.to_string
+            if key in by_klid and key not in seen:
+                ordered.append(by_klid[key])
+                seen.add(key)
+
+        for layout in self._registry.layouts():
+            key = layout.layout_id.to_string
+            if key not in seen:
+                ordered.append(layout)
+
+        return ordered
 
     # --- state <-> widgets ---
 
     def _load_state(self):
-        self._rebuild_rows()
+        self._rebuild_rows(self._ordered_layouts_for_display())
         self._carousel_hotkey_edit.set_hotkey(self._setup.next_layout_in_loop_hotkey.to_hotkey_string())
 
         in_loop = {klid.to_string for klid in self._setup.in_loop_keyboard_layout_ids}
@@ -232,12 +298,15 @@ class SettingsWindow(QWidget):
 
         bindings = {row.klid: row.hotkey_edit.hotkey() for row in self._rows if row.hotkey_edit.hotkey()}
 
+        # Direct hotkeys may share a combo (that group becomes another
+        # carousel). The primary carousel hotkey must stay unique.
         duplicate = self._find_exact_duplicate(carousel_hotkey, bindings)
         if duplicate:
             QMessageBox.warning(
                 self, "Settings",
-                f"Hotkey \"{duplicate}\" is assigned twice. Exact duplicates are not allowed\n"
-                f"(extended combos like Alt+Shift and Alt+Shift+G are fine)."
+                f"Hotkey \"{duplicate}\" is already the carousel hotkey.\n"
+                f"Pick a different combination for the direct binding\n"
+                f"(or give several layouts the same direct hotkey to cycle them)."
             )
             return
 
@@ -273,10 +342,11 @@ class SettingsWindow(QWidget):
 
     @staticmethod
     def _find_exact_duplicate(carousel_hotkey: str, bindings: dict) -> str | None:
-        seen: dict[frozenset, str] = {}
-        for hotkey in [carousel_hotkey, *bindings.values()]:
-            combo = KeyCombination.from_hotkey_string(hotkey).as_frozenset()
-            if combo in seen:
+        # Exact duplicates among direct hotkeys are allowed — they form an
+        # extra carousel. Only a clash with the primary carousel hotkey is
+        # rejected.
+        carousel_combo = KeyCombination.from_hotkey_string(carousel_hotkey).as_frozenset()
+        for hotkey in bindings.values():
+            if KeyCombination.from_hotkey_string(hotkey).as_frozenset() == carousel_combo:
                 return hotkey
-            seen[combo] = hotkey
         return None

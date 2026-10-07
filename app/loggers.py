@@ -14,5 +14,5 @@ class SystemHotkeysGuardLogger(NamedLogger):
 
 
 @singleton
-class SubsystemReadyLogger(NamedLogger):
-    name = "ls.subsystem-ready"
+class AutostartLogger(NamedLogger):
+    name = "ls.autostart"

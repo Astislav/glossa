@@ -1,6 +1,6 @@
-"""The Windows session-end handler must restore the system hotkeys — the
-teardown on exec() return does not run when the OS kills a tray app during
-shutdown."""
+"""Session-end handlers on the Application: give the hotkeys back when the
+session ends; take them back if the shutdown is cancelled — but only if the
+app had taken over in the first place."""
 from nexus_kit import Root
 from nexus_kit.impl import ContainerInjector
 
@@ -13,9 +13,13 @@ from app.services.system_hotkeys_guard import SystemHotkeysGuard
 class FakeGuard:
     def __init__(self):
         self.stop_calls = 0
+        self.activate_calls = 0
 
     def stop(self):
         self.stop_calls += 1
+
+    def activate(self):
+        self.activate_calls += 1
 
 
 def _application_with_fake_guard():
@@ -29,14 +33,19 @@ def _application_with_fake_guard():
 
 def test_session_end_restores_system_hotkeys():
     app, fake_guard = _application_with_fake_guard()
-    app._on_session_end(None)
+    app._on_session_end()
     assert fake_guard.stop_calls == 1
 
 
-def test_session_end_is_the_guard_stop_path():
-    # A second session-end (or the later teardown) must be safe to call —
-    # the guard itself is idempotent, so the Application need not deduplicate.
+def test_cancelled_shutdown_retakes_hotkeys_after_activation():
     app, fake_guard = _application_with_fake_guard()
-    app._on_session_end(None)
-    app._on_session_end(None)
-    assert fake_guard.stop_calls == 2
+    app._activated = True
+    app._on_session_resumed()
+    assert fake_guard.activate_calls == 1
+
+
+def test_cancelled_shutdown_before_activation_does_nothing():
+    # Still waiting for the OS — nothing to take back.
+    app, fake_guard = _application_with_fake_guard()
+    app._on_session_resumed()
+    assert fake_guard.activate_calls == 0

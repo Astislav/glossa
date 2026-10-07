@@ -39,6 +39,9 @@ class SystemHotkeysGuard(ServiceInterface):
         self._system_settings.recover_if_needed()
 
     def activate(self):
+        if self._active:
+            return  # already taken over
+
         # Take over — but only if we actually have a carousel to drive. An
         # empty carousel must never disable the system's own switching.
         if not self._setup.in_loop_keyboard_layout_ids:

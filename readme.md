@@ -30,11 +30,14 @@ Glossa is a small Windows tray app that does exactly that. (Named after
 - **Responsive by design** — hotkey detection runs in a lightweight hook;
   the actual switching happens off the input path, so your keystrokes are
   never delayed.
-- Autostart with Windows (a checkbox), single-instance guard, and the
-  system's own layout hotkeys are disabled while the app runs — and restored
-  when it exits, including on Windows shutdown/logoff. The original values
-  are also backed up on disk, so even a hard kill or power loss can't lose
-  them: the next run picks them up.
+- Starts right at sign-in (a checkbox; a per-user Task Scheduler logon
+  task, no admin rights needed) instead of waiting in the Windows startup
+  queue, which under an antivirus can take minutes.
+- The system's own layout hotkeys are disabled only while Glossa is in
+  charge, and handed back when it exits - including on Windows
+  shutdown/logoff. The original values are also backed up on disk, so even a
+  hard kill or power loss can't lose them: the next run restores them first
+  thing. Single-instance guard included.
 
 ## Who it's for
 

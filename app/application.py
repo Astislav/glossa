@@ -1,6 +1,5 @@
 import sys
 
-from PySide6.QtCore import Qt
 from PySide6.QtGui import QAction, QIcon
 from PySide6.QtWidgets import QApplication, QMenu, QSystemTrayIcon
 
@@ -10,6 +9,7 @@ from nexus_kit.interfaces import ApplicationInterface, ContainerInterface
 
 from app.config.environment import Environment
 from app.readiness_controller import ReadinessController
+from app.session_end_watcher import SessionEndWatcher
 from app.services.autostart import Autostart
 from app.services.settings_store import SettingsStore
 from app.services.system_hotkeys_guard import SystemHotkeysGuard
@@ -28,6 +28,8 @@ class Application(ApplicationInterface):
     def __init__(self, environment: Environment, container: ContainerInterface):
         self._env = environment
         self._container = container
+        self._activated = False
+        self._session_watcher = None
 
     def run(self):
         app = QApplication(sys.argv)
@@ -73,13 +75,11 @@ class Application(ApplicationInterface):
             lambda: tray_icon.showMessage(self._env.APP_NAME, "Settings applied")
         )
 
-        # Windows shutdown/logoff kills a hidden tray app before exec()
-        # returns, so the ServiceRunner teardown below never runs and the
-        # system layout hotkeys stay disabled in the registry. commitDataRequest
-        # fires during the session-end handshake — restore them right there,
-        # synchronously (DirectConnection is required: a queued slot would
-        # never run before the process is killed).
-        app.commitDataRequest.connect(self._on_session_end, Qt.DirectConnection)
+        # Windows shutdown/logoff kills a tray app before exec() returns, so
+        # the ServiceRunner teardown below never runs. Restore the system
+        # hotkeys from the session-end messages instead (see SessionEndWatcher
+        # for why a dedicated hidden window is needed to receive them at all).
+        self._session_watcher = SessionEndWatcher(self._on_session_end, self._on_session_resumed)
 
         tray_icon.show()
 
@@ -99,17 +99,33 @@ class Application(ApplicationInterface):
     def _activate(self, tray_icon, waited: bool):
         # The OS keyboard subsystem is ready: load settings, take over the
         # hotkeys, arm the switcher.
+        self._activated = True
         self._container.get(SettingsStore).load()
         self._container.get(SystemHotkeysGuard).activate()
         self._container.get(KeyboardLayoutManager).activate()
 
         tray_icon.setToolTip(self._env.APP_NAME)
+
+        # Older builds autostarted via the Run key, which Windows delays by
+        # minutes after sign-in. Move it to the logon task (and follow the exe
+        # if it moved). Never let this break activation.
+        try:
+            self._container.get(Autostart).migrate()
+        except Exception:
+            pass
+
         if waited:
             # Only surface a toast when we actually had to wait (a cold boot) —
             # no notification spam on a normal launch.
             tray_icon.showMessage(self._env.APP_NAME, "Glossa is ready")
 
-    def _on_session_end(self, _session_manager):
-        # Idempotent: SystemHotkeysGuard.stop() no-ops if already restored,
-        # so the normal teardown re-running this later is harmless.
+    def _on_session_end(self):
+        # Idempotent: SystemHotkeysGuard.stop() no-ops if already restored, so
+        # QUERYENDSESSION + ENDSESSION + the normal teardown can all call it.
         self._container.get(SystemHotkeysGuard).stop()
+
+    def _on_session_resumed(self):
+        # Shutdown was cancelled after we had already given the hotkeys back —
+        # take them over again, or Windows and Glossa would both switch.
+        if self._activated:
+            self._container.get(SystemHotkeysGuard).activate()

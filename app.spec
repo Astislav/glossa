@@ -58,9 +58,47 @@ a = Analysis(  # noqa: F821
         # dynamic imports PyInstaller cannot see, e.g.:
         # *collect_submodules("engineio"),   (from PyInstaller.utils.hooks import collect_submodules)
     ],
-    excludes=[],
+    # Not used by a tray app with no network: dropping them also drops the
+    # OpenSSL DLLs (hashlib falls back to its built-in implementations).
+    excludes=["ssl", "_ssl", "_hashlib", "PySide6.QtNetwork"],
     noarchive=False,
 )
+
+# The onefile exe unpacks EVERYTHING into %TEMP% on every start, and right
+# after sign-in an antivirus scans each file — measured at 54 s for the default
+# 125 MB / 228 files. Glossa is a Widgets tray app: it needs Qt Core/Gui/
+# Widgets, the Windows platform, the Windows style and the .ico reader, nothing
+# else. (Checked by PE imports: none of these depend on what is dropped below.)
+KEEP_QT_PLUGINS = {
+    "platforms/qwindows.dll",
+    "platforms/qoffscreen.dll",        # headless smoke test in CI (QT_QPA_PLATFORM=offscreen)
+    "styles/qmodernwindowsstyle.dll",
+    "imageformats/qico.dll",           # tray and window icon is an .ico
+}
+DROP_QT_LIBS = {
+    "opengl32sw.dll",                  # software OpenGL fallback, 20 MB; we never use OpenGL
+    "Qt6OpenGL.dll",
+    # pulled in by the on-screen keyboard input plugin (QML-based):
+    "Qt6VirtualKeyboard.dll", "Qt6Quick.dll", "Qt6Qml.dll", "Qt6QmlModels.dll",
+    "Qt6QmlMeta.dll", "Qt6QmlWorkerScript.dll",
+    "Qt6Pdf.dll",                      # PDF image plugin
+    "Qt6Svg.dll",                      # SVG icon/image plugins
+    "Qt6Network.dll", "libssl-3-x64.dll", "libcrypto-3-x64.dll",  # Qt TLS / network plugins
+}
+
+
+def _needed(dest: str) -> bool:
+    path = dest.replace("\\", "/")
+    if path.startswith("PySide6/translations/"):
+        return False                   # the UI is English-only
+    if path.startswith("PySide6/plugins/"):
+        return path.removeprefix("PySide6/plugins/") in KEEP_QT_PLUGINS
+    return path.rsplit("/", 1)[-1] not in DROP_QT_LIBS
+
+
+a.binaries = [entry for entry in a.binaries if _needed(entry[0])]
+a.datas = [entry for entry in a.datas if _needed(entry[0])]
+
 pyz = PYZ(a.pure)  # noqa: F821
 
 exe = EXE(  # noqa: F821

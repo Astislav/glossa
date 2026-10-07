@@ -1,7 +1,6 @@
 """Session-end handlers on the Application: give the hotkeys back when the
 session ends; take them back if the shutdown is cancelled — but only if the
 app had taken over in the first place."""
-from nexus_kit import Root
 from nexus_kit.impl import ContainerInjector
 
 from app.application import Application
@@ -23,7 +22,9 @@ class FakeGuard:
 
 
 def _application_with_fake_guard():
-    env = Environment(Root.external(".env"))
+    # Not the developer's real .env: under pytest Root points at the project,
+    # so Root.external(".env") would read local settings into the test.
+    env = Environment(None)
     container = ContainerInjector(DI_CONFIG)
     container.set(Environment, env)
     fake_guard = FakeGuard()

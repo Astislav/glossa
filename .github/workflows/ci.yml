@@ -12,4 +12,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
       - run: uv sync
+      # Guides in .nexus-kit/ must match the installed nexus-kit: upgrading the
+      # kernel without `nexus-kit update-ai-guides` fails here.
+      - run: uv run nexus-kit update-ai-guides --check
       - run: uv run pytest
